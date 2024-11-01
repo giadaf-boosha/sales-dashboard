@@ -1,4 +1,3 @@
-import openpyxl
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -97,7 +96,10 @@ if sezione == "Caricamento Dati":
         data = pd.read_excel(uploaded_file)
 
         # Controllo delle colonne necessarie
-        required_columns = ['Data', 'Vendite', 'Leads', 'Conversioni', 'Canale', 'Fase', 'Cliente', 'Abbandono']
+        required_columns = ['Sales', 'Canale', 'Meeting Fissato', 'Meeting Effettuato (SQL)', 'Offerte Inviate',
+                            'Analisi Firmate', 'Contratti Chiusi', 'Persi', 'Nome Persona', 'Ruolo', 'Azienda',
+                            'Dimensioni', 'Settore', 'Come mai ha accettato?', 'SQL', 'Stato', 'Servizio',
+                            'Valore Tot €', 'Obiezioni', 'Note']
         if all(column in data.columns for column in required_columns):
             st.success("Dati caricati con successo!")
             # Mostra i dati
@@ -113,21 +115,52 @@ if sezione == "Caricamento Dati":
 elif 'data' in st.session_state:
     data = st.session_state['data']
 
-    # Calcolo delle metriche globali da usare in diverse sezioni
-    # Converti 'Data' in datetime
-    data['Data'] = pd.to_datetime(data['Data'])
+    # Preprocessamento dei dati
+    # Convertire le colonne data in formato datetime
+    date_columns = ['Meeting Fissato', 'Meeting Effettuato (SQL)', 'Offerte Inviate',
+                    'Analisi Firmate', 'Contratti Chiusi']
+    for col in date_columns:
+        data[col] = pd.to_datetime(data[col], errors='coerce', dayfirst=True)
 
-    # Calcolo di churn_rate
-    totale_clienti = data['Cliente'].nunique()
-    clienti_persi = data[data['Abbandono'] == True]['Cliente'].nunique()
-    churn_rate = (clienti_persi / totale_clienti) * 100 if totale_clienti > 0 else 0
-    st.session_state['churn_rate'] = churn_rate
+    # Calcolo delle metriche globali
 
-    # Calcolo del conversion_rate
-    totale_lead = data['Leads'].sum()
-    totale_conversioni = data['Conversioni'].sum()
+    # Vendite totali (sommando 'Valore Tot €')
+    data['Valore Tot €'] = pd.to_numeric(data['Valore Tot €'], errors='coerce')
+    vendite_totali = data['Valore Tot €'].sum()
+
+    # Numero di lead generati (numero di 'Meeting Fissato' non nulli)
+    totale_lead = data['Meeting Fissato'].notnull().sum()
+
+    # Numero di conversioni (numero di 'Contratti Chiusi' non nulli)
+    totale_conversioni = data['Contratti Chiusi'].notnull().sum()
+
+    # Tasso di conversione
     conversion_rate = (totale_conversioni / totale_lead) * 100 if totale_lead > 0 else 0
+
+    # Canali di acquisizione più performanti (basato sul numero di conversioni per 'Canale')
+    canali_perf = data[data['Contratti Chiusi'].notnull()].groupby('Canale').size().reset_index(name='Conversioni')
+
+    # Fasi della pipeline (contare il numero di lead in ogni fase)
+    pipeline_stages = ['Meeting Fissato', 'Meeting Effettuato (SQL)', 'Offerte Inviate',
+                       'Analisi Firmate', 'Contratti Chiusi']
+    pipeline_counts = {}
+    for stage in pipeline_stages:
+        pipeline_counts[stage] = data[stage].notnull().sum()
+
+    # Calcolo del churn rate (tasso di abbandono)
+    # Poiché non abbiamo informazioni sui clienti persi, potremmo considerare 'Persi' come indicatore
+    totale_clienti = data['Azienda'].nunique()
+    clienti_persi = data['Persi'].notnull().sum()
+    churn_rate = (clienti_persi / totale_clienti) * 100 if totale_clienti > 0 else 0
+
+    # Salva le metriche in session_state
+    st.session_state['vendite_totali'] = vendite_totali
+    st.session_state['totale_lead'] = totale_lead
+    st.session_state['totale_conversioni'] = totale_conversioni
     st.session_state['conversion_rate'] = conversion_rate
+    st.session_state['canali_perf'] = canali_perf
+    st.session_state['pipeline_counts'] = pipeline_counts
+    st.session_state['churn_rate'] = churn_rate
 
     # Sezione Dashboard
     if sezione == "Dashboard":
@@ -138,21 +171,18 @@ elif 'data' in st.session_state:
         # Prestazioni di vendita
         with col1:
             st.subheader("Prestazioni di Vendita")
-            vendite_totali = data['Vendite'].sum()
             st.metric(label="Vendite Totali", value=f"€ {vendite_totali:,.2f}")
 
-            # Andamento vendite per trimestre
-            data['Trimestre'] = data['Data'].dt.to_period('Q')
-            vendite_trimestrali = data.groupby('Trimestre')['Vendite'].sum().reset_index()
-
-            # Converti 'Trimestre' in stringa
-            vendite_trimestrali['Trimestre'] = vendite_trimestrali['Trimestre'].astype(str)
+            # Andamento delle vendite per mese
+            data['Mese'] = data['Contratti Chiusi'].dt.to_period('M')
+            vendite_mensili = data.groupby('Mese')['Valore Tot €'].sum().reset_index()
+            vendite_mensili['Mese'] = vendite_mensili['Mese'].astype(str)
 
             fig = px.bar(
-                vendite_trimestrali,
-                x='Trimestre',
-                y='Vendite',
-                title="Vendite per Trimestre",
+                vendite_mensili,
+                x='Mese',
+                y='Valore Tot €',
+                title="Vendite per Mese",
                 color_discrete_sequence=['#007aff']
             )
             st.plotly_chart(fig, use_container_width=True)
@@ -164,7 +194,6 @@ elif 'data' in st.session_state:
             st.metric(label="Conversion Rate", value=f"{conversion_rate:.2f}%")
 
             # Canali di acquisizione più performanti
-            canali_perf = data.groupby('Canale')['Conversioni'].sum().reset_index()
             fig2 = px.pie(
                 canali_perf,
                 values='Conversioni',
@@ -198,11 +227,10 @@ elif 'data' in st.session_state:
 
         # Grafico a imbuto per la gestione pipeline
         st.subheader("Gestione Pipeline")
-        fasi = data['Fase'].unique()
-        pipeline = data.groupby('Fase')['Leads'].sum().reset_index()
-        pipeline = pipeline.sort_values(by='Leads', ascending=False)
+        pipeline_df = pd.DataFrame(list(pipeline_counts.items()), columns=['Fase', 'Leads'])
+        pipeline_df = pipeline_df.sort_values(by='Leads', ascending=False)
         fig4 = px.funnel(
-            pipeline,
+            pipeline_df,
             x='Leads',
             y='Fase',
             title='Pipeline di Vendita',
@@ -211,14 +239,13 @@ elif 'data' in st.session_state:
         )
         st.plotly_chart(fig4, use_container_width=True)
 
-        # Mappe di calore per canali di vendita
+        # Mappe di Calore per canali di vendita
         st.subheader("Mappe di Calore dei Canali di Vendita")
-        # Converti 'Trimestre' in stringa
-        data['Trimestre'] = data['Trimestre'].astype(str)
-        heatmap_data = data.pivot_table(values='Vendite', index='Canale', columns='Trimestre', aggfunc='sum')
+        data['Mese'] = data['Mese'].astype(str)
+        heatmap_data = data.pivot_table(values='Valore Tot €', index='Canale', columns='Mese', aggfunc='sum')
         fig5, ax5 = plt.subplots(figsize=(10,6))
         sns.heatmap(heatmap_data, annot=True, fmt=".2f", cmap='Blues', ax=ax5)
-        ax5.set_title("Vendite per Canale e Trimestre", fontsize=16, fontweight='bold')
+        ax5.set_title("Vendite per Canale e Mese", fontsize=16, fontweight='bold')
         st.pyplot(fig5)
 
     elif sezione == "AI Descrittiva":
@@ -228,7 +255,6 @@ elif 'data' in st.session_state:
             # Implementazione semplice per scopo dimostrativo
             risposta = ""
             if "quante vendite" in domanda.lower():
-                vendite_totali = data['Vendite'].sum()
                 risposta = f"Il totale delle vendite è € {vendite_totali:,.2f}"
             elif "canali di vendita" in domanda.lower():
                 canali = data['Canale'].unique()
@@ -245,22 +271,28 @@ elif 'data' in st.session_state:
         st.header("Modulo AI Predittivo")
         st.write("Previsioni di vendita per i prossimi 3 mesi")
         # Previsione semplice usando regressione lineare
-        data['DataOrdinal'] = data['Data'].map(pd.Timestamp.toordinal)
-        X = data[['DataOrdinal']]
-        y = data['Vendite']
-        model = LinearRegression()
-        model.fit(X, y)
-        # Previsione per i prossimi 90 giorni
-        last_date = data['Data'].max()
-        future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=90, freq='D')
-        future_dates_ordinal = future_dates.map(pd.Timestamp.toordinal).values.reshape(-1, 1)
-        predictions = model.predict(future_dates_ordinal)
-        # Unisci dati storici e previsioni
-        future_df = pd.DataFrame({'Data': future_dates, 'Vendite': predictions})
-        combined_df = pd.concat([data[['Data', 'Vendite']], future_df])
-        # Visualizzazione delle previsioni
-        fig2 = px.line(combined_df, x='Data', y='Vendite', title="Vendite Storiche e Previsioni Future", color_discrete_sequence=['#007aff'])
-        st.plotly_chart(fig2, use_container_width=True)
+        # Utilizziamo le date di 'Contratti Chiusi' e i 'Valore Tot €'
+        df_pred = data.dropna(subset=['Contratti Chiusi', 'Valore Tot €'])
+        df_pred = df_pred.sort_values('Contratti Chiusi')
+        df_pred['DataOrdinal'] = df_pred['Contratti Chiusi'].map(pd.Timestamp.toordinal)
+        X = df_pred[['DataOrdinal']]
+        y = df_pred['Valore Tot €']
+        if len(X) > 1:
+            model = LinearRegression()
+            model.fit(X, y)
+            # Previsione per i prossimi 90 giorni
+            last_date = df_pred['Contratti Chiusi'].max()
+            future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=90, freq='D')
+            future_dates_ordinal = future_dates.map(pd.Timestamp.toordinal).values.reshape(-1, 1)
+            predictions = model.predict(future_dates_ordinal)
+            # Unisci dati storici e previsioni
+            future_df = pd.DataFrame({'Contratti Chiusi': future_dates, 'Valore Tot €': predictions})
+            combined_df = pd.concat([df_pred[['Contratti Chiusi', 'Valore Tot €']], future_df])
+            # Visualizzazione delle previsioni
+            fig2 = px.line(combined_df, x='Contratti Chiusi', y='Valore Tot €', title="Vendite Storiche e Previsioni Future", color_discrete_sequence=['#007aff'])
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.warning("Dati insufficienti per effettuare una previsione.")
 
     elif sezione == "Consulenza Strategica":
         st.header("Modulo AI Consulenza Strategica")
@@ -269,9 +301,9 @@ elif 'data' in st.session_state:
             # Implementazione semplice per scopo dimostrativo
             consigli = []
             # Analisi del canale più performante
-            canali_perf = data.groupby('Canale')['Conversioni'].sum().reset_index()
-            top_canale = canali_perf.loc[canali_perf['Conversioni'].idxmax()]['Canale']
-            consigli.append(f"**Suggerimento:** Investi maggiormente nel canale '{top_canale}' che mostra le migliori performance in termini di conversioni.")
+            if not canali_perf.empty:
+                top_canale = canali_perf.loc[canali_perf['Conversioni'].idxmax()]['Canale']
+                consigli.append(f"**Suggerimento:** Investi maggiormente nel canale '{top_canale}' che mostra le migliori performance in termini di conversioni.")
             # Consiglio sulla riduzione del churn rate
             if churn_rate > 30:
                 consigli.append("**Consiglio:** Il churn rate è elevato. Implementa programmi di fidelizzazione per migliorare la customer retention.")
@@ -292,6 +324,6 @@ else:
 st.markdown("""
     <hr>
     <div style='text-align: center; color: #888888;'>
-        © 2024 - Boosha AI
+        © 2023 - La tua Azienda
     </div>
     """, unsafe_allow_html=True)
