@@ -13,17 +13,24 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Stile personalizzato
+# Stile personalizzato in linea con il branding fornito
 st.markdown("""
     <style>
     /* Font e colori */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
-    html, body, [class*="css"] {
+
+    html, body, [class*="css"]  {
         font-family: 'Inter', sans-serif;
         background-color: #ffffff;
+        color: #333333;
     }
-    /* Colori personalizzati */
-    .css-18e3th9 { color: #333333; } /* Titoli */
+
+    /* Stile delle metriche */
+    .stMetricLabel, .stMetricValue {
+        color: #007aff;
+    }
+
+    /* Pulsanti e interattività */
     .stButton>button {
         color: #ffffff;
         background-color: #007aff;
@@ -31,7 +38,7 @@ st.markdown("""
         height: 3em;
         font-size: 16px;
     }
-    .metric { color: #007aff; }
+
     </style>
     """, unsafe_allow_html=True)
 
@@ -47,190 +54,130 @@ if sezione == "Caricamento Dati":
     st.header("Caricamento dei Dati")
     uploaded_file = st.file_uploader("Carica un file Excel con i dati di vendita", type=["xlsx"])
     if uploaded_file is not None:
-        # Carica i dati da entrambi i fogli per assicurarsi che tutte le informazioni siano disponibili
-        excel_data = pd.ExcelFile(uploaded_file)
-        data_input = excel_data.parse('🚀INPUT')
-        data_objective = excel_data.parse('🎯Obiettivo')
+        data = pd.read_excel(uploaded_file, sheet_name='🚀INPUT')
         
-        # Pulizia colonne rilevanti del foglio "🚀INPUT"
-        data_input.columns = data_input.columns.str.strip()
-        data_input['Meeting FIssato'] = pd.to_datetime(data_input['Meeting FIssato'], errors='coerce')
-        data_input['Contratti Chiusi'] = pd.to_datetime(data_input['Contratti Chiusi'], errors='coerce')
-        data_input['Persi'] = pd.to_datetime(data_input['Persi'], errors='coerce')
-        data_input['Valore Tot €'] = pd.to_numeric(data_input['Valore Tot €'], errors='coerce').fillna(0)
+        # Pulizia colonne rilevanti
+        data.columns = data.columns.str.strip()
+        data['Meeting FIssato'] = pd.to_datetime(data['Meeting FIssato'], errors='coerce')
+        data['Contratti Chiusi'] = pd.to_datetime(data['Contratti Chiusi'], errors='coerce')
+        data['Persi'] = pd.to_datetime(data['Persi'], errors='coerce')
+        data['Valore Tot €'] = pd.to_numeric(data['Valore Tot €'], errors='coerce').fillna(0)
 
         st.success("Dati caricati con successo!")
         if st.checkbox("Mostra dati grezzi"):
-            st.subheader("Dati Grezzi (🚀INPUT)")
-            st.write(data_input)
-            st.subheader("Dati Obiettivo (🎯Obiettivo)")
-            st.write(data_objective)
-        st.session_state['data_input'] = data_input
-        st.session_state['data_objective'] = data_objective
+            st.subheader("Dati Grezzi")
+            st.write(data)
+        st.session_state['data'] = data
 
     else:
         st.warning("Per favore, carica un file Excel per iniziare.")
 
-elif 'data_input' in st.session_state and 'data_objective' in st.session_state:
-    data_input = st.session_state['data_input']
-    data_objective = st.session_state['data_objective']
+elif 'data' in st.session_state:
+    data = st.session_state['data']
 
-    # Calcolo delle metriche chiave per il foglio "🚀INPUT"
-    totale_opportunita = data_input['Meeting FIssato'].notnull().sum()
-    totale_vinti = data_input['Contratti Chiusi'].notnull().sum()
-    totale_persi = data_input['Persi'].notnull().sum()
-    totale_revenue = data_input['Valore Tot €'].sum()
+    # Calcolo delle metriche chiave
+    totale_opportunita = data['Meeting FIssato'].notnull().sum()
+    totale_vinti = data['Contratti Chiusi'].notnull().sum()
+    totale_persi = data['Persi'].notnull().sum()
+    totale_revenue = data['Valore Tot €'].sum()
     win_rate = (totale_vinti / totale_opportunita) * 100 if totale_opportunita > 0 else 0
     lost_rate = (totale_persi / totale_opportunita) * 100 if totale_opportunita > 0 else 0
 
     # Tempo medio di chiusura per le opportunità vinte
-    data_input['Days_to_Close'] = (data_input['Contratti Chiusi'] - data_input['Meeting FIssato']).dt.days
-    tempo_medio_chiusura = data_input.loc[data_input['Contratti Chiusi'].notnull(), 'Days_to_Close'].mean()
+    data['Days_to_Close'] = (data['Contratti Chiusi'] - data['Meeting FIssato']).dt.days
+    tempo_medio_chiusura = data.loc[data['Contratti Chiusi'].notnull(), 'Days_to_Close'].mean()
     
     # Pipeline Velocity (Velocità della pipeline)
     pipeline_velocity = totale_revenue / tempo_medio_chiusura if tempo_medio_chiusura > 0 else 0
     
     # Contributo percentuale alla pipeline per canale
-    revenue_per_canale = data_input.groupby('Canale')['Valore Tot €'].sum()
+    revenue_per_canale = data.groupby('Canale')['Valore Tot €'].sum()
     percentuale_contributo = (revenue_per_canale / totale_revenue) * 100
 
-    # Revenue per Servizio
-    revenue_per_servizio = data_input.groupby('Servizio')['Valore Tot €'].sum()
+    # ACV (Average Contract Value) per canale
+    acv_per_canale = revenue_per_canale / data[data['Contratti Chiusi'].notnull()].groupby('Canale').size()
+    acv_per_canale = acv_per_canale.fillna(0)  # Gestione dei valori NaN
 
-    # Calcolo degli obiettivi mensili dal foglio "🎯Obiettivo"
-    data_objective.columns = ['Mese', 'Obj', 'Reality', 'Scostamento', 'Note', 'Extra']
-    data_objective['Reality'] = pd.to_numeric(data_objective['Reality'], errors='coerce').fillna(0)
-    data_objective['Obj'] = pd.to_numeric(data_objective['Obj'], errors='coerce').fillna(0)
-    data_objective['Scostamento'] = data_objective['Reality'] - data_objective['Obj']
+    # Tabella riepilogativa per Canale
+    st.header("Dashboard")
+    st.subheader("Tabella Riepilogativa per Canale")
+    summary_df = pd.DataFrame({
+        'Source': revenue_per_canale.index,
+        'Total Opps. created': data.groupby('Canale').size(),
+        'Total Closed Lost Opps.': data[data['Persi'].notnull()].groupby('Canale').size(),
+        'Total Closed Won Opps.': data[data['Contratti Chiusi'].notnull()].groupby('Canale').size(),
+        'Total Closed Won Revenue': revenue_per_canale,
+        'ACV': acv_per_canale,
+        'Closed Won Avg. Sales Cycle': data[data['Contratti Chiusi'].notnull()].groupby('Canale')['Days_to_Close'].mean(),
+        'Win-Rate': (data[data['Contratti Chiusi'].notnull()].groupby('Canale').size() / data.groupby('Canale').size()) * 100,
+        'Pipeline Velocity': pipeline_velocity,
+        '% of pipeline contribution': percentuale_contributo
+    }).reset_index(drop=True)
+    st.write(summary_df)
 
-    # Visualizzazione delle metriche chiave nella dashboard
-    if sezione == "Dashboard":
-        st.header("Dashboard")
-        
-        # Sezione metriche chiave
-        st.subheader("Key Metrics")
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Opportunità Totali", totale_opportunita)
-        col2.metric("Opportunità Vinte", totale_vinti)
-        col3.metric("Opportunità Perse", totale_persi)
-        col4.metric("Revenue Totale", f"€{totale_revenue:,.2f}")
+    # Sezione metriche chiave
+    st.subheader("Key Metrics")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Opportunità Totali", totale_opportunita)
+    col2.metric("Opportunità Vinte", totale_vinti)
+    col3.metric("Opportunità Perse", totale_persi)
+    col4.metric("Revenue Totale", f"€{totale_revenue:,.2f}")
 
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Win Rate", f"{win_rate:.2f}%")
-        col2.metric("Lost Rate", f"{lost_rate:.2f}%")
-        col3.metric("Tempo Medio di Chiusura (giorni)", f"{tempo_medio_chiusura:.2f}")
-        col4.metric("Pipeline Velocity", f"€{pipeline_velocity:,.2f}")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Win Rate", f"{win_rate:.2f}%")
+    col2.metric("Lost Rate", f"{lost_rate:.2f}%")
+    col3.metric("Tempo Medio di Chiusura (giorni)", f"{tempo_medio_chiusura:.2f}")
+    col4.metric("Pipeline Velocity", f"€{pipeline_velocity:,.2f}")
 
-        # Tabella riepilogativa per Canale
-        st.subheader("Tabella Riepilogativa per Canale")
-        summary_df = pd.DataFrame({
-            'Total Revenue': revenue_per_canale,
-            '% of Pipeline Contribution': percentuale_contributo
-        }).reset_index()
-        st.write(summary_df)
+    # Visualizzazione grafici interattivi
+    # Grafico a barre delle opportunità chiuse per canale
+    st.subheader("Opportunità Chiuse per Canale")
+    closed_opps = data[data['Contratti Chiusi'].notnull()]
+    closed_opps_count = closed_opps.groupby('Canale').size().reset_index(name='Opportunità Chiuse')
+    fig1 = px.bar(closed_opps_count, x='Canale', y='Opportunità Chiuse', title="Opportunità Chiuse per Canale", color='Canale', color_discrete_sequence=px.colors.sequential.Blues)
+    st.plotly_chart(fig1, use_container_width=True)
 
-        # Visualizzazione grafici interattivi
-        # Grafico a barre delle opportunità chiuse per canale
-        st.subheader("Opportunità Chiuse per Canale")
-        closed_opps = data_input[data_input['Contratti Chiusi'].notnull()]
-        closed_opps_count = closed_opps.groupby('Canale').size().reset_index(name='Opportunità Chiuse')
-        fig1 = px.bar(closed_opps_count, x='Canale', y='Opportunità Chiuse', title="Opportunità Chiuse per Canale", color='Canale')
-        st.plotly_chart(fig1, use_container_width=True)
+    # Grafico a torta per la percentuale di contributo per canale
+    st.subheader("Contributo Percentuale alla Pipeline per Canale")
+    fig2 = px.pie(summary_df, values='% of pipeline contribution', names='Source', title='Contributo Percentuale alla Pipeline')
+    st.plotly_chart(fig2, use_container_width=True)
 
-        # Grafico a torta per la percentuale di contributo per canale
-        st.subheader("Contributo Percentuale alla Pipeline per Canale")
-        fig2 = px.pie(summary_df, values='% of Pipeline Contribution', names='Canale', title='Contributo Percentuale alla Pipeline')
-        st.plotly_chart(fig2, use_container_width=True)
-
+    # Grafico a barre
         # Grafico a barre per Revenue per Servizio
-        st.subheader("Revenue per Servizio")
-        revenue_servizio_df = revenue_per_servizio.reset_index()
-        fig3 = px.bar(revenue_servizio_df, x='Servizio', y='Valore Tot €', title="Revenue per Servizio", color='Servizio')
-        st.plotly_chart(fig3, use_container_width=True)
+    st.subheader("Revenue per Servizio")
+    revenue_servizio_df = data.groupby('Servizio')['Valore Tot €'].sum().reset_index()
+    fig3 = px.bar(revenue_servizio_df, x='Servizio', y='Valore Tot €', title="Revenue per Servizio", color='Servizio', color_discrete_sequence=px.colors.sequential.Blues)
+    st.plotly_chart(fig3, use_container_width=True)
 
-        # Grafico degli obiettivi mensili
-        st.subheader("Andamento Obiettivi Mensili")
-        fig4 = px.line(data_objective, x='Mese', y='Reality', title="Obiettivi vs. Reality", labels={'Reality': 'Entrate Effettive', 'Obj': 'Obiettivo'})
-        fig4.add_scatter(x=data_objective['Mese'], y=data_objective['Obj'], mode='lines+markers', name='Obiettivo')
-        st.plotly_chart(fig4, use_container_width=True)
+    # Distribuzione dei Valori dei Contratti (Istogramma)
+    st.subheader("Distribuzione dei Valori dei Contratti")
+    fig4 = px.histogram(data[data['Valore Tot €'] > 0], x='Valore Tot €', nbins=20, title="Distribuzione dei Valori dei Contratti", color_discrete_sequence=['#007aff'])
+    st.plotly_chart(fig4, use_container_width=True)
 
-    elif sezione == "Consulenza Strategica":
-        st.header("Modulo AI Consulenza Strategica")
-        st.write("Analisi dei dati per fornire consigli strategici personalizzati.")
-        if st.button("Genera consigli strategici"):
-            consigli = []
-            if not canali_perf.empty:
-                top_canale = canali_perf.loc[canali_perf['Conversioni'].idxmax()]['Canale']
-                consigli.append(f"**Suggerimento:** Investi maggiormente nel canale '{top_canale}' che mostra le migliori performance in termini di conversioni.")
-            if churn_rate > 30:
-                consigli.append("**Consiglio:** Il churn rate è elevato. Implementa programmi di fidelizzazione per migliorare la customer retention.")
-            else:
-                consigli.append("**Consiglio:** Il churn rate è sotto controllo. Continua a monitorare la soddisfazione dei clienti.")
-            if conversion_rate < 20:
-                consigli.append("**Consiglio:** Il tasso di conversione è basso. Valuta di ottimizzare le strategie di vendita e formazione del team.")
-            else:
-                consigli.append("**Suggerimento:** Mantieni le attuali strategie di conversione che stanno dando buoni risultati.")
-            for consiglio in consigli:
-                st.write(consiglio)
+    # Andamento Mensile delle Opportunità e delle Revenue
+    st.subheader("Andamento Mensile delle Opportunità e delle Revenue")
+    data['Mese'] = data['Contratti Chiusi'].dt.to_period('M').astype(str)
+    monthly_revenue = data.groupby('Mese')['Valore Tot €'].sum().reset_index()
+    monthly_opportunities = data.groupby('Mese').size().reset_index(name='Opportunità Totali')
+    
+    fig5 = px.line(monthly_revenue, x='Mese', y='Valore Tot €', title="Andamento Mensile delle Revenue", markers=True, line_shape='linear', color_discrete_sequence=['#007aff'])
+    fig5.update_layout(yaxis_title="Revenue (€)")
+    st.plotly_chart(fig5, use_container_width=True)
+    
+    fig6 = px.line(monthly_opportunities, x='Mese', y='Opportunità Totali', title="Andamento Mensile delle Opportunità", markers=True, line_shape='linear', color_discrete_sequence=['#ff7f0e'])
+    fig6.update_layout(yaxis_title="Opportunità Totali")
+    st.plotly_chart(fig6, use_container_width=True)
 
-    elif sezione == "AI Descrittiva":
-        st.header("Modulo AI Descrittiva")
-        domanda = st.text_input("Fai una domanda sui dati di vendita")
-        if domanda:
-            risposta = ""
-            if "quante vendite" in domanda.lower():
-                risposta = f"Il totale delle vendite è € {vendite_totali:,.2f}"
-            elif "canali di vendita" in domanda.lower():
-                canali = data['Canale'].unique()
-                risposta = f"I principali canali di vendita sono: {', '.join(canali)}"
-            elif "churn rate" in domanda.lower():
-                risposta = f"Il churn rate è {churn_rate:.2f}%"
-            elif "conversion rate" in domanda.lower():
-                risposta = f"Il tasso di conversione è {conversion_rate:.2f}%"
-            else:
-                risposta = "Non ho una risposta precisa a questa domanda al momento."
-            st.write(risposta)
-
-    elif sezione == "AI Predittiva":
-        st.header("Modulo AI Predittivo")
-        st.write("Previsioni di vendita per i prossimi 3 mesi")
-        df_pred = data.dropna(subset=['Contratti Chiusi', 'Valore Tot €'])
-        df_pred = df_pred.sort_values('Contratti Chiusi')
-        df_pred['DataOrdinal'] = df_pred['Contratti Chiusi'].map(pd.Timestamp.toordinal)
-        X = df_pred[['DataOrdinal']]
-        y = df_pred['Valore Tot €']
-        if len(X) > 1:
-            model = LinearRegression()
-            model.fit(X, y)
-            last_date = df_pred['Contratti Chiusi'].max()
-            future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=90, freq='D')
-            future_dates_ordinal = future_dates.map(pd.Timestamp.toordinal).values.reshape(-1, 1)
-            predictions = model.predict(future_dates_ordinal)
-            future_df = pd.DataFrame({'Contratti Chiusi': future_dates, 'Valore Tot €': predictions})
-            combined_df = pd.concat([df_pred[['Contratti Chiusi', 'Valore Tot €']], future_df])
-            fig6 = px.line(combined_df, x='Contratti Chiusi', y='Valore Tot €', title="Vendite Storiche e Previsioni Future", color_discrete_sequence=['#007aff'])
-            st.plotly_chart(fig6, use_container_width=True)
-        else:
-            st.warning("Dati insufficienti per effettuare una previsione.")
-
-    elif sezione == "Consulenza Strategica":
-        st.header("Modulo AI Consulenza Strategica")
-        st.write("Analisi dei dati per fornire consigli strategici personalizzati.")
-        if st.button("Genera consigli strategici"):
-            consigli = []
-            if not canali_perf.empty:
-                top_canale = canali_perf.loc[canali_perf['Conversioni'].idxmax()]['Canale']
-                consigli.append(f"**Suggerimento:** Investi maggiormente nel canale '{top_canale}' che mostra le migliori performance in termini di conversioni.")
-            if churn_rate > 30:
-                consigli.append("**Consiglio:** Il churn rate è elevato. Implementa programmi di fidelizzazione per migliorare la customer retention.")
-            else:
-                consigli.append("**Consiglio:** Il churn rate è sotto controllo. Continua a monitorare la soddisfazione dei clienti.")
-            if conversion_rate < 20:
-                consigli.append("**Consiglio:** Il tasso di conversione è basso. Valuta di ottimizzare le strategie di vendita e formazione del team.")
-            else:
-                consigli.append("**Suggerimento:** Mantieni le attuali strategie di conversione che stanno dando buoni risultati.")
-            for consiglio in consigli:
-                st.write(consiglio)
+    # Conversion Rate per Fase della Pipeline
+    st.subheader("Conversion Rate per Fase della Pipeline")
+    pipeline_stages = ['Meeting FIssato', 'Offerte Inviate', 'Analisi Firmate', 'Contratti Chiusi']
+    conversion_rates = {
+        stage: (data[stage].notnull().sum() / totale_opportunita) * 100 if totale_opportunita > 0 else 0
+        for stage in pipeline_stages
+    }
+    conversion_df = pd.DataFrame(list(conversion_rates.items()), columns=['Fase', 'Conversion Rate (%)'])
+    fig7 = px.bar(conversion_df, x='Fase', y='Conversion Rate (%)', title="Conversion Rate per Fase della Pipeline", color='Fase', color_discrete_sequence=px.colors.sequential.Blues)
+    st.plotly_chart(fig7, use_container_width=True)
 
 else:
     st.warning("Per favore, carica i dati nella sezione 'Caricamento Dati' per continuare.")
