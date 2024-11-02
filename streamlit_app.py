@@ -87,42 +87,39 @@ st.title("📈 Dashboard Avanzata di Monitoraggio Vendite con AI")
 st.sidebar.title("Navigazione")
 sezione = st.sidebar.radio("Vai a:", ["Caricamento Dati", "Dashboard", "AI Descrittiva", "AI Predittiva", "Consulenza Strategica"])
 
+# Titolo dell'app
+st.title("📈 Dashboard Avanzata di Monitoraggio Vendite con AI")
+
+# Barra laterale per la navigazione
+st.sidebar.title("Navigazione")
+sezione = st.sidebar.radio("Vai a:", ["Caricamento Dati", "Dashboard", "AI Descrittiva", "AI Predittiva", "Consulenza Strategica"])
+
 # Caricamento dati
 if sezione == "Caricamento Dati":
     st.header("Caricamento dei Dati")
     uploaded_file = st.file_uploader("Carica un file Excel con i dati di vendita", type=["xlsx"])
     if uploaded_file is not None:
         # Leggi il file Excel
-        data = pd.read_excel(uploaded_file)
-
-        # Lista delle colonne richieste
+        data = pd.read_excel(uploaded_file, sheet_name='🚀INPUT')  # Carica il foglio '🚀INPUT'
+        
+        # Definisci le colonne richieste e imposta valori di default a 0 se mancanti
         required_columns = ['Sales', 'Canale', 'Meeting Fissato', 'Meeting Effettuato (SQL)', 'Offerte Inviate',
                             'Analisi Firmate', 'Contratti Chiusi', 'Persi', 'Nome Persona', 'Ruolo', 'Azienda',
                             'Dimensioni', 'Settore', 'Come mai ha accettato?', 'SQL', 'Stato', 'Servizio',
                             'Valore Tot €', 'Obiezioni', 'Note']
+        
+        # Aggiungi le colonne mancanti con valore di default 0
+        for column in required_columns:
+            if column not in data.columns:
+                data[column] = 0
 
-        # Identifica le colonne mancanti
-        missing_columns = [col for col in required_columns if col not in data.columns]
-        if missing_columns:
-            st.warning(f"Le seguenti colonne mancano e saranno impostate a valori predefiniti: {', '.join(missing_columns)}")
-            for col in missing_columns:
-                # Aggiungi la colonna mancante con valori predefiniti appropriati
-                if col in ['Valore Tot €']:
-                    data[col] = 0.0
-                elif col in ['Sales', 'Canale', 'Nome Persona', 'Ruolo', 'Azienda', 'Dimensioni', 'Settore',
-                             'Come mai ha accettato?', 'SQL', 'Stato', 'Servizio', 'Obiezioni', 'Note']:
-                    data[col] = ''
-                elif col in ['Meeting Fissato', 'Meeting Effettuato (SQL)', 'Offerte Inviate',
-                             'Analisi Firmate', 'Contratti Chiusi', 'Persi']:
-                    data[col] = pd.NaT  # Valore per date mancanti
-                else:
-                    data[col] = np.nan
+        # Messaggio di successo e anteprima dati
         st.success("Dati caricati con successo!")
-        # Mostra i dati
         if st.checkbox("Mostra dati grezzi"):
             st.subheader("Dati Grezzi")
             st.write(data)
         st.session_state['data'] = data
+
     else:
         st.warning("Per favore, carica un file Excel per iniziare.")
 
