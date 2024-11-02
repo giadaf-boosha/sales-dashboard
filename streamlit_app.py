@@ -95,25 +95,31 @@ if sezione == "Caricamento Dati":
         # Leggi il file Excel
         data = pd.read_excel(uploaded_file)
 
-        # Controllo delle colonne necessarie
-        required_columns = ['Sales', 'Canale', 'Meeting Fissato', 'Meeting Effettuato (SQL)', 'Offerte Inviate',
-                            'Analisi Firmate', 'Contratti Chiusi', 'Persi', 'Nome Persona', 'Ruolo', 'Azienda',
-                            'Dimensioni', 'Settore', 'Come mai ha accettato?', 'SQL', 'Stato', 'Servizio',
-                            'Valore Tot €', 'Obiezioni', 'Note']
-        if all(column in data.columns for column in required_columns):
-            st.success("Dati caricati con successo!")
-            # Mostra i dati
-            if st.checkbox("Mostra dati grezzi"):
-                st.subheader("Dati Grezzi")
-                st.write(data)
-            st.session_state['data'] = data
-        else:
-            st.error(f"Il file deve contenere le seguenti colonne: {', '.join(required_columns)}")
+        # Lista delle colonne richieste e i loro valori predefiniti
+    required_columns = {
+        'Data': pd.NaT,
+        'Vendite': 0.0,
+        'Leads': 0,
+        'Conversioni': 0,
+        'Canale': '',
+        'Fase': '',
+        'Cliente': '',
+        'Abbandono': False
+    }
+
+# Aggiungi le colonne mancanti con valori predefiniti
+missing_columns = []
+for column, default_value in required_columns.items():
+    if column not in data.columns:
+        data[column] = default_value
+        missing_columns.append(column)
     else:
         st.warning("Per favore, carica un file Excel per iniziare.")
 
-elif 'data' in st.session_state:
-    data = st.session_state['data']
+if missing_columns:
+    st.info(f"Sono state aggiunte le seguenti colonne mancanti con valori predefiniti: {', '.join(missing_columns)}")
+
+
 
     # Preprocessamento dei dati
     # Convertire le colonne data in formato datetime
