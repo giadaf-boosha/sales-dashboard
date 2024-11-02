@@ -82,7 +82,7 @@ if sezione == "Caricamento Dati":
 
     else:
         st.warning("Per favore, carica un file Excel per iniziare.")# Caricamento dati
-        
+
 elif 'data' in st.session_state:
     data = st.session_state['data']
 
@@ -269,7 +269,7 @@ elif 'data' in st.session_state:
                 model = LinearRegression()
                 model.fit(X, y)
                 last_date = df_pred['Contratti Chiusi'].max()
-                future_dates = pd.date_range(start=last_date + pd.Tim
+                future_dates = pd.date_range(start=last_date + pd.Tim)
                 # Continua dalla sezione AI Predittiva
                 future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=90, freq='D')
                 future_dates_ordinal = future_dates.map(pd.Timestamp.toordinal).values.reshape(-1, 1)
