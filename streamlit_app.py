@@ -54,8 +54,17 @@ sezione = st.sidebar.radio("Vai a:", ["Caricamento Dati", "Dashboard", "AI Descr
 # Caricamento dati
 if sezione == "Caricamento Dati":
     st.header("Caricamento dei Dati")
+    
+    # Aggiunta del pulsante per pulire la cache
+    if st.button("Pulisci Cache"):
+        st.cache_data.clear()
+        st.success("Cache pulita con successo!")
+    
     uploaded_file = st.file_uploader("Carica un file Excel con i dati di vendita", type=["xlsx"])
     if uploaded_file is not None:
+        # Pulisce la cache prima di caricare nuovi dati
+        st.cache_data.clear()
+        
         data = pd.read_excel(uploaded_file, sheet_name='🚀INPUT')
         
         # Pulizia colonne rilevanti
@@ -72,8 +81,8 @@ if sezione == "Caricamento Dati":
         st.session_state['data'] = data
 
     else:
-        st.warning("Per favore, carica un file Excel per iniziare.")
-
+        st.warning("Per favore, carica un file Excel per iniziare.")# Caricamento dati
+        
 elif 'data' in st.session_state:
     data = st.session_state['data']
 
