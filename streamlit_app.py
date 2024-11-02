@@ -95,68 +95,99 @@ if sezione == "Caricamento Dati":
         # Leggi il file Excel
         data = pd.read_excel(uploaded_file)
 
-        # Lista delle colonne richieste e i loro valori predefiniti
-    required_columns = {
-        'Data': pd.NaT,
-        'Vendite': 0.0,
-        'Leads': 0,
-        'Conversioni': 0,
-        'Canale': '',
-        'Fase': '',
-        'Cliente': '',
-        'Abbandono': False
-    }
+        # Lista delle colonne richieste
+        required_columns = ['Sales', 'Canale', 'Meeting Fissato', 'Meeting Effettuato (SQL)', 'Offerte Inviate',
+                            'Analisi Firmate', 'Contratti Chiusi', 'Persi', 'Nome Persona', 'Ruolo', 'Azienda',
+                            'Dimensioni', 'Settore', 'Come mai ha accettato?', 'SQL', 'Stato', 'Servizio',
+                            'Valore Tot €', 'Obiezioni', 'Note']
 
-# Aggiungi le colonne mancanti con valori predefiniti
-missing_columns = []
-for column, default_value in required_columns.items():
-    if column not in data.columns:
-        data[column] = default_value
-        missing_columns.append(column)
+        # Identifica le colonne mancanti
+        missing_columns = [col for col in required_columns if col not in data.columns]
+        if missing_columns:
+            st.warning(f"Le seguenti colonne mancano e saranno impostate a valori predefiniti: {', '.join(missing_columns)}")
+            for col in missing_columns:
+                # Aggiungi la colonna mancante con valori predefiniti appropriati
+                if col in ['Valore Tot €']:
+                    data[col] = 0.0
+                elif col in ['Sales', 'Canale', 'Nome Persona', 'Ruolo', 'Azienda', 'Dimensioni', 'Settore',
+                             'Come mai ha accettato?', 'SQL', 'Stato', 'Servizio', 'Obiezioni', 'Note']:
+                    data[col] = ''
+                elif col in ['Meeting Fissato', 'Meeting Effettuato (SQL)', 'Offerte Inviate',
+                             'Analisi Firmate', 'Contratti Chiusi', 'Persi']:
+                    data[col] = pd.NaT  # Valore per date mancanti
+                else:
+                    data[col] = np.nan
+        st.success("Dati caricati con successo!")
+        # Mostra i dati
+        if st.checkbox("Mostra dati grezzi"):
+            st.subheader("Dati Grezzi")
+            st.write(data)
+        st.session_state['data'] = data
     else:
         st.warning("Per favore, carica un file Excel per iniziare.")
 
-if missing_columns:
-    st.info(f"Sono state aggiunte le seguenti colonne mancanti con valori predefiniti: {', '.join(missing_columns)}")
-
-
+elif 'data' in st.session_state:
+    data = st.session_state['data']
 
     # Preprocessamento dei dati
     # Convertire le colonne data in formato datetime
     date_columns = ['Meeting Fissato', 'Meeting Effettuato (SQL)', 'Offerte Inviate',
                     'Analisi Firmate', 'Contratti Chiusi']
     for col in date_columns:
-        data[col] = pd.to_datetime(data[col], errors='coerce', dayfirst=True)
+        if col in data.columns:
+            data[col] = pd.to_datetime(data[col], errors='coerce', dayfirst=True)
 
     # Calcolo delle metriche globali
 
     # Vendite totali (sommando 'Valore Tot €')
-    data['Valore Tot €'] = pd.to_numeric(data['Valore Tot €'], errors='coerce')
-    vendite_totali = data['Valore Tot €'].sum()
+    if 'Valore Tot €' in data.columns:
+        data['Valore Tot €'] = pd.to_numeric(data['Valore Tot €'], errors='coerce').fillna(0)
+        vendite_totali = data['Valore Tot €'].sum()
+    else:
+        vendite_totali = 0.0
 
     # Numero di lead generati (numero di 'Meeting Fissato' non nulli)
-    totale_lead = data['Meeting Fissato'].notnull().sum()
+    if 'Meeting Fissato' in data.columns:
+        totale_lead = data['Meeting Fissato'].notnull().sum()
+    else:
+        totale_lead = 0
 
     # Numero di conversioni (numero di 'Contratti Chiusi' non nulli)
-    totale_conversioni = data['Contratti Chiusi'].notnull().sum()
+    if 'Contratti Chiusi' in data.columns:
+        totale_conversioni = data['Contratti Chiusi'].notnull().sum()
+    else:
+        totale_conversioni = 0
 
     # Tasso di conversione
     conversion_rate = (totale_conversioni / totale_lead) * 100 if totale_lead > 0 else 0
 
     # Canali di acquisizione più performanti (basato sul numero di conversioni per 'Canale')
-    canali_perf = data[data['Contratti Chiusi'].notnull()].groupby('Canale').size().reset_index(name='Conversioni')
+    if 'Canale' in data.columns and 'Contratti Chiusi' in data.columns:
+        canali_perf = data[data['Contratti Chiusi'].notnull()].groupby('Canale').size().reset_index(name='Conversioni')
+    else:
+        canali_perf = pd.DataFrame(columns=['Canale', 'Conversioni'])
 
     # Fasi della pipeline (contare il numero di lead in ogni fase)
     pipeline_stages = ['Meeting Fissato', 'Meeting Effettuato (SQL)', 'Offerte Inviate',
                        'Analisi Firmate', 'Contratti Chiusi']
     pipeline_counts = {}
     for stage in pipeline_stages:
-        pipeline_counts[stage] = data[stage].notnull().sum()
+        if stage in data.columns:
+            pipeline_counts[stage] = data[stage].notnull().sum()
+        else:
+            pipeline_counts[stage] = 0
 
     # Calcolo del churn rate (tasso di abbandono)
-    # Poiché non abbiamo informazioni sui clienti persi, potremmo considerare 'Persi' come indicatore
-    totale_clienti = data['Azienda'].nunique()
-    clienti_persi = data['Persi'].notnull().sum()
+    if 'Azienda' in data.columns:
+        totale_clienti = data['Azienda'].nunique()
+    else:
+        totale_clienti = 0
+
+    if 'Persi' in data.columns:
+        clienti_persi = data[data['Persi'].notnull()].shape[0]
+    else:
+        clienti_persi = 0
+
     churn_rate = (clienti_persi / totale_clienti) * 100 if totale_clienti > 0 else 0
 
     # Salva le metriche in session_state
@@ -180,18 +211,19 @@ if missing_columns:
             st.metric(label="Vendite Totali", value=f"€ {vendite_totali:,.2f}")
 
             # Andamento delle vendite per mese
-            data['Mese'] = data['Contratti Chiusi'].dt.to_period('M')
-            vendite_mensili = data.groupby('Mese')['Valore Tot €'].sum().reset_index()
-            vendite_mensili['Mese'] = vendite_mensili['Mese'].astype(str)
-
-            fig = px.bar(
-                vendite_mensili,
-                x='Mese',
-                y='Valore Tot €',
-                title="Vendite per Mese",
-                color_discrete_sequence=['#007aff']
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            if 'Contratti Chiusi' in data.columns and 'Valore Tot €' in data.columns:
+                data['Mese'] = data['Contratti Chiusi'].dt.to_period('M').astype(str)
+                vendite_mensili = data.groupby('Mese')['Valore Tot €'].sum().reset_index()
+                fig = px.bar(
+                    vendite_mensili,
+                    x='Mese',
+                    y='Valore Tot €',
+                    title="Vendite per Mese",
+                    color_discrete_sequence=['#007aff']
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.write("Dati insufficienti per mostrare il grafico delle vendite mensili.")
 
         # Conversioni e lead
         with col2:
@@ -200,14 +232,17 @@ if missing_columns:
             st.metric(label="Conversion Rate", value=f"{conversion_rate:.2f}%")
 
             # Canali di acquisizione più performanti
-            fig2 = px.pie(
-                canali_perf,
-                values='Conversioni',
-                names='Canale',
-                title='Canali di Acquisizione più Performanti',
-                color_discrete_sequence=px.colors.sequential.Blues
-            )
-            st.plotly_chart(fig2, use_container_width=True)
+            if not canali_perf.empty:
+                fig2 = px.pie(
+                    canali_perf,
+                    values='Conversioni',
+                    names='Canale',
+                    title='Canali di Acquisizione più Performanti',
+                    color_discrete_sequence=px.colors.sequential.Blues
+                )
+                st.plotly_chart(fig2, use_container_width=True)
+            else:
+                st.write("Dati insufficienti per mostrare i canali più performanti.")
 
         # Customer Retention e Churn Rate
         with col3:
@@ -235,24 +270,32 @@ if missing_columns:
         st.subheader("Gestione Pipeline")
         pipeline_df = pd.DataFrame(list(pipeline_counts.items()), columns=['Fase', 'Leads'])
         pipeline_df = pipeline_df.sort_values(by='Leads', ascending=False)
-        fig4 = px.funnel(
-            pipeline_df,
-            x='Leads',
-            y='Fase',
-            title='Pipeline di Vendita',
-            color='Fase',
-            color_discrete_sequence=px.colors.sequential.Blues
-        )
-        st.plotly_chart(fig4, use_container_width=True)
+        if not pipeline_df.empty:
+            fig4 = px.funnel(
+                pipeline_df,
+                x='Leads',
+                y='Fase',
+                title='Pipeline di Vendita',
+                color='Fase',
+                color_discrete_sequence=px.colors.sequential.Blues
+            )
+            st.plotly_chart(fig4, use_container_width=True)
+        else:
+            st.write("Dati insufficienti per mostrare la pipeline di vendita.")
 
         # Mappe di Calore per canali di vendita
         st.subheader("Mappe di Calore dei Canali di Vendita")
-        data['Mese'] = data['Mese'].astype(str)
-        heatmap_data = data.pivot_table(values='Valore Tot €', index='Canale', columns='Mese', aggfunc='sum')
-        fig5, ax5 = plt.subplots(figsize=(10,6))
-        sns.heatmap(heatmap_data, annot=True, fmt=".2f", cmap='Blues', ax=ax5)
-        ax5.set_title("Vendite per Canale e Mese", fontsize=16, fontweight='bold')
-        st.pyplot(fig5)
+        if 'Canale' in data.columns and 'Mese' in data.columns and 'Valore Tot €' in data.columns:
+            heatmap_data = data.pivot_table(values='Valore Tot €', index='Canale', columns='Mese', aggfunc='sum', fill_value=0)
+            if not heatmap_data.empty:
+                fig5, ax5 = plt.subplots(figsize=(10,6))
+                sns.heatmap(heatmap_data, annot=True, fmt=".2f", cmap='Blues', ax=ax5)
+                ax5.set_title("Vendite per Canale e Mese", fontsize=16, fontweight='bold')
+                st.pyplot(fig5)
+            else:
+                st.write("Dati insufficienti per mostrare la mappa di calore.")
+        else:
+            st.write("Dati insufficienti per mostrare la mappa di calore.")
 
     elif sezione == "AI Descrittiva":
         st.header("Modulo AI Descrittiva")
@@ -263,8 +306,11 @@ if missing_columns:
             if "quante vendite" in domanda.lower():
                 risposta = f"Il totale delle vendite è € {vendite_totali:,.2f}"
             elif "canali di vendita" in domanda.lower():
-                canali = data['Canale'].unique()
-                risposta = f"I principali canali di vendita sono: {', '.join(canali)}"
+                if 'Canale' in data.columns:
+                    canali = data['Canale'].unique()
+                    risposta = f"I principali canali di vendita sono: {', '.join(canali)}"
+                else:
+                    risposta = "Non sono disponibili informazioni sui canali di vendita."
             elif "churn rate" in domanda.lower():
                 risposta = f"Il churn rate è {churn_rate:.2f}%"
             elif "conversion rate" in domanda.lower():
@@ -278,25 +324,28 @@ if missing_columns:
         st.write("Previsioni di vendita per i prossimi 3 mesi")
         # Previsione semplice usando regressione lineare
         # Utilizziamo le date di 'Contratti Chiusi' e i 'Valore Tot €'
-        df_pred = data.dropna(subset=['Contratti Chiusi', 'Valore Tot €'])
-        df_pred = df_pred.sort_values('Contratti Chiusi')
-        df_pred['DataOrdinal'] = df_pred['Contratti Chiusi'].map(pd.Timestamp.toordinal)
-        X = df_pred[['DataOrdinal']]
-        y = df_pred['Valore Tot €']
-        if len(X) > 1:
-            model = LinearRegression()
-            model.fit(X, y)
-            # Previsione per i prossimi 90 giorni
-            last_date = df_pred['Contratti Chiusi'].max()
-            future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=90, freq='D')
-            future_dates_ordinal = future_dates.map(pd.Timestamp.toordinal).values.reshape(-1, 1)
-            predictions = model.predict(future_dates_ordinal)
-            # Unisci dati storici e previsioni
-            future_df = pd.DataFrame({'Contratti Chiusi': future_dates, 'Valore Tot €': predictions})
-            combined_df = pd.concat([df_pred[['Contratti Chiusi', 'Valore Tot €']], future_df])
-            # Visualizzazione delle previsioni
-            fig2 = px.line(combined_df, x='Contratti Chiusi', y='Valore Tot €', title="Vendite Storiche e Previsioni Future", color_discrete_sequence=['#007aff'])
-            st.plotly_chart(fig2, use_container_width=True)
+        if 'Contratti Chiusi' in data.columns and 'Valore Tot €' in data.columns:
+            df_pred = data.dropna(subset=['Contratti Chiusi', 'Valore Tot €'])
+            df_pred = df_pred.sort_values('Contratti Chiusi')
+            df_pred['DataOrdinal'] = df_pred['Contratti Chiusi'].map(pd.Timestamp.toordinal)
+            X = df_pred[['DataOrdinal']]
+            y = df_pred['Valore Tot €']
+            if len(X) > 1:
+                model = LinearRegression()
+                model.fit(X, y)
+                # Previsione per i prossimi 90 giorni
+                last_date = df_pred['Contratti Chiusi'].max()
+                future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=90, freq='D')
+                future_dates_ordinal = future_dates.map(pd.Timestamp.toordinal).values.reshape(-1, 1)
+                predictions = model.predict(future_dates_ordinal)
+                # Unisci dati storici e previsioni
+                future_df = pd.DataFrame({'Contratti Chiusi': future_dates, 'Valore Tot €': predictions})
+                combined_df = pd.concat([df_pred[['Contratti Chiusi', 'Valore Tot €']], future_df])
+                # Visualizzazione delle previsioni
+                fig2 = px.line(combined_df, x='Contratti Chiusi', y='Valore Tot €', title="Vendite Storiche e Previsioni Future", color_discrete_sequence=['#007aff'])
+                st.plotly_chart(fig2, use_container_width=True)
+            else:
+                st.warning("Dati insufficienti per effettuare una previsione.")
         else:
             st.warning("Dati insufficienti per effettuare una previsione.")
 
@@ -310,6 +359,8 @@ if missing_columns:
             if not canali_perf.empty:
                 top_canale = canali_perf.loc[canali_perf['Conversioni'].idxmax()]['Canale']
                 consigli.append(f"**Suggerimento:** Investi maggiormente nel canale '{top_canale}' che mostra le migliori performance in termini di conversioni.")
+            else:
+                consigli.append("**Suggerimento:** Non ci sono dati sufficienti per identificare il canale più performante.")
             # Consiglio sulla riduzione del churn rate
             if churn_rate > 30:
                 consigli.append("**Consiglio:** Il churn rate è elevato. Implementa programmi di fidelizzazione per migliorare la customer retention.")
@@ -330,6 +381,6 @@ else:
 st.markdown("""
     <hr>
     <div style='text-align: center; color: #888888;'>
-        © 2023 - La tua Azienda
+        © 2024 - Boosha 
     </div>
     """, unsafe_allow_html=True)
