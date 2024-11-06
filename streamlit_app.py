@@ -324,6 +324,8 @@ elif 'data' in st.session_state:
                 model = LinearRegression()
                 model.fit(X, y)
                 last_date = df_pred['Contratti Chiusi'].max()
+                # Convertiamo last_date in un oggetto datetime nativo
+                last_date = last_date.to_pydatetime()
                 future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=90, freq='D')
                 future_dates_ordinal = future_dates.map(pd.Timestamp.toordinal).values.reshape(-1, 1)
                 predictions = model.predict(future_dates_ordinal)
@@ -340,6 +342,7 @@ elif 'data' in st.session_state:
                 # Creazione del dataframe per la visualizzazione
                 future_df = pd.DataFrame({'Contratti Chiusi': future_dates, 'Valore Tot €': predictions})
                 combined_df = pd.concat([df_pred[['Contratti Chiusi', 'Valore Tot €']], future_df])
+                combined_df['Contratti Chiusi'] = pd.to_datetime(combined_df['Contratti Chiusi'])
                 
                 # Grafico delle previsioni
                 fig_pred = px.line(combined_df, x='Contratti Chiusi', y='Valore Tot €', 
