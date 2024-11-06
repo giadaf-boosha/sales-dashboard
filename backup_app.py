@@ -51,34 +51,6 @@ st.title("📈 Dashboard Sales KPI + AI 🚀")
 st.sidebar.title("Navigazione")
 sezione = st.sidebar.radio("Vai a:", ["Caricamento Dati", "Dashboard", "AI Descrittiva", "AI Predittiva", "Consulenza Strategica"])
 
-# Funzione per processare il campo 'Canale'
-def process_canale(canale):
-    canale = str(canale).strip()
-    team_member = None
-    main_channel = canale  # Valore predefinito
-
-    # Gestione dei canali LinkedIn
-    if 'linkedin' in canale.lower():
-        canale_lower = canale.lower().replace('-', ' ')
-        parts = canale_lower.split()
-        direction = None
-        member_parts = []
-        for part in parts:
-            if part in ['linkedin', 'in', 'out']:
-                if part == 'in':
-                    direction = 'Inbound'
-                elif part == 'out':
-                    direction = 'Outbound'
-            else:
-                member_parts.append(part)
-        main_channel = f"LinkedIn {direction}" if direction else "LinkedIn"
-        team_member = ' '.join(member_parts).title() if member_parts else None
-    else:
-        main_channel = canale.title()
-        team_member = None
-
-    return pd.Series({'MainChannel': main_channel, 'TeamMember': team_member})
-
 # Caricamento dati
 if sezione == "Caricamento Dati":
     st.header("Caricamento dei Dati")
@@ -97,22 +69,10 @@ if sezione == "Caricamento Dati":
         
         # Pulizia colonne rilevanti
         data.columns = data.columns.str.strip()
-        date_columns = ['Meeting FIssato', 'Meeting Effettuato (SQL)', 'Offerte Inviate', 'Analisi Firmate', 'Contratti Chiusi', 'Persi']
-        for col in date_columns:
-            if col in data.columns:
-                data[col] = pd.to_datetime(data[col], errors='coerce')
-
-        if 'Valore Tot €' in data.columns:
-            data['Valore Tot €'] = pd.to_numeric(data['Valore Tot €'], errors='coerce').fillna(0)
-        else:
-            data['Valore Tot €'] = 0
-
-        # Processamento del campo 'Canale'
-        if 'Canale' in data.columns:
-            data[['MainChannel', 'TeamMember']] = data['Canale'].apply(process_canale)
-        else:
-            data['MainChannel'] = 'Unknown'
-            data['TeamMember'] = None
+        data['Meeting FIssato'] = pd.to_datetime(data['Meeting FIssato'], errors='coerce')
+        data['Contratti Chiusi'] = pd.to_datetime(data['Contratti Chiusi'], errors='coerce')
+        data['Persi'] = pd.to_datetime(data['Persi'], errors='coerce')
+        data['Valore Tot €'] = pd.to_numeric(data['Valore Tot €'], errors='coerce').fillna(0)
 
         st.success("Dati caricati con successo!")
         if st.checkbox("Mostra dati grezzi"):
@@ -121,7 +81,7 @@ if sezione == "Caricamento Dati":
         st.session_state['data'] = data
 
     else:
-        st.warning("Per favore, carica un file Excel per iniziare.")
+        st.warning("Per favore, carica un file Excel per iniziare.")# Caricamento dati
 
 elif 'data' in st.session_state:
     data = st.session_state['data']
@@ -146,23 +106,43 @@ elif 'data' in st.session_state:
     conversion_rate = (totale_vinti / totale_opportunita) * 100 if totale_opportunita > 0 else 0
     
     # Analisi performance per canale
-    if 'MainChannel' in data.columns:
-        canali_perf = data.groupby('MainChannel').agg({
-            'Contratti Chiusi': lambda x: x.notnull().sum(),
-            'Valore Tot €': 'sum'
-        }).rename(columns={'Contratti Chiusi': 'Conversioni'})
+    if 'Canale' in data.columns:
+        canali_perf = pd.DataFrame({
+            'Canale': data['Canale'].unique(),
+            'Conversioni': [
+                len(data[(data['Canale'] == canale) & (data['Contratti Chiusi'].notnull())]) 
+                for canale in data['Canale'].unique()
+            ]
+        })
         
         # Contributo percentuale alla pipeline per canale
-        revenue_per_canale = canali_perf['Valore Tot €']
+        revenue_per_canale = data.groupby('Canale')['Valore Tot €'].sum()
         percentuale_contributo = (revenue_per_canale / totale_revenue) * 100
 
         # ACV (Average Contract Value) per canale
-        acv_per_canale = revenue_per_canale / canali_perf['Conversioni']
+        acv_per_canale = revenue_per_canale / data[data['Contratti Chiusi'].notnull()].groupby('Canale').size()
         acv_per_canale = acv_per_canale.fillna(0)
 
     if sezione == "Dashboard":
         st.header("Dashboard")
         
+        # Tabella riepilogativa per Canale
+        if 'Canale' in data.columns:
+            st.subheader("Tabella Riepilogativa per Canale")
+            summary_df = pd.DataFrame({
+                'Source': revenue_per_canale.index,
+                'Total Opps. created': data.groupby('Canale').size(),
+                'Total Closed Lost Opps.': data[data['Persi'].notnull()].groupby('Canale').size(),
+                'Total Closed Won Opps.': data[data['Contratti Chiusi'].notnull()].groupby('Canale').size(),
+                'Total Closed Won Revenue': revenue_per_canale,
+                'ACV': acv_per_canale,
+                'Closed Won Avg. Sales Cycle': data[data['Contratti Chiusi'].notnull()].groupby('Canale')['Days_to_Close'].mean(),
+                'Win-Rate': (data[data['Contratti Chiusi'].notnull()].groupby('Canale').size() / data.groupby('Canale').size()) * 100,
+                'Pipeline Velocity': pipeline_velocity,
+                '% of pipeline contribution': percentuale_contributo
+            }).reset_index(drop=True)
+            st.write(summary_df)
+
         # Sezione metriche chiave
         st.subheader("Key Metrics")
         col1, col2, col3, col4 = st.columns(4)
@@ -176,58 +156,23 @@ elif 'data' in st.session_state:
         col2.metric("Lost Rate", f"{lost_rate:.2f}%")
         col3.metric("Tempo Medio di Chiusura (giorni)", f"{tempo_medio_chiusura:.2f}")
         col4.metric("Pipeline Velocity", f"€{pipeline_velocity:,.2f}")
-        
-        # Opzione per selezionare il livello di dettaglio
-        st.subheader("Analisi per Canale")
-        detail_level = st.radio("Seleziona il livello di dettaglio", ('Aggregato per Canale', 'Individuale per Team Member'))
-
-        if detail_level == 'Aggregato per Canale':
-            grouping_column = 'MainChannel'
-            title_suffix = "per Canale"
-        else:
-            grouping_column = 'TeamMember'
-            title_suffix = "per Team Member"
-
-        # Tabella riepilogativa
-        if grouping_column in data.columns:
-            st.subheader(f"Tabella Riepilogativa {title_suffix}")
-            summary_df = data.groupby(grouping_column).agg({
-                'Meeting FIssato': 'count',
-                'Persi': lambda x: x.notnull().sum(),
-                'Contratti Chiusi': lambda x: x.notnull().sum(),
-                'Valore Tot €': 'sum',
-                'Days_to_Close': 'mean'
-            }).rename(columns={
-                'Meeting FIssato': 'Total Opps. created',
-                'Persi': 'Total Closed Lost Opps.',
-                'Contratti Chiusi': 'Total Closed Won Opps.',
-                'Valore Tot €': 'Total Closed Won Revenue',
-                'Days_to_Close': 'Closed Won Avg. Sales Cycle'
-            })
-
-            summary_df['ACV'] = summary_df['Total Closed Won Revenue'] / summary_df['Total Closed Won Opps.']
-            summary_df['Win-Rate'] = (summary_df['Total Closed Won Opps.'] / summary_df['Total Opps. created']) * 100
-            summary_df['% of pipeline contribution'] = (summary_df['Total Closed Won Revenue'] / totale_revenue) * 100
-            summary_df['Pipeline Velocity'] = summary_df['Total Closed Won Revenue'] / summary_df['Closed Won Avg. Sales Cycle']
-
-            st.write(summary_df.fillna(0))
 
         # Visualizzazione grafici interattivi
-        if grouping_column in data.columns:
-            # Grafico a barre delle opportunità chiuse
-            st.subheader(f"Opportunità Chiuse {title_suffix}")
+        if 'Canale' in data.columns:
+            # Grafico a barre delle opportunità chiuse per canale
+            st.subheader("Opportunità Chiuse per Canale")
             closed_opps = data[data['Contratti Chiusi'].notnull()]
-            closed_opps_count = closed_opps.groupby(grouping_column).size().reset_index(name='Opportunità Chiuse')
-            fig1 = px.bar(closed_opps_count, x=grouping_column, y='Opportunità Chiuse', 
-                         title=f"Opportunità Chiuse {title_suffix}", 
-                         color=grouping_column, 
+            closed_opps_count = closed_opps.groupby('Canale').size().reset_index(name='Opportunità Chiuse')
+            fig1 = px.bar(closed_opps_count, x='Canale', y='Opportunità Chiuse', 
+                         title="Opportunità Chiuse per Canale", 
+                         color='Canale', 
                          color_discrete_sequence=px.colors.sequential.Blues)
             st.plotly_chart(fig1, use_container_width=True)
 
-            # Grafico a torta per la percentuale di contributo
-            st.subheader(f"Contributo Percentuale alla Pipeline {title_suffix}")
-            fig2 = px.pie(summary_df.reset_index(), values='% of pipeline contribution', names=grouping_column, 
-                         title=f'Contributo Percentuale alla Pipeline {title_suffix}')
+            # Grafico a torta per la percentuale di contributo per canale
+            st.subheader("Contributo Percentuale alla Pipeline per Canale")
+            fig2 = px.pie(summary_df, values='% of pipeline contribution', names='Source', 
+                         title='Contributo Percentuale alla Pipeline')
             st.plotly_chart(fig2, use_container_width=True)
 
         if 'Servizio' in data.columns:
@@ -290,8 +235,8 @@ elif 'data' in st.session_state:
             if "quante vendite" in domanda.lower():
                 risposta = f"Il totale delle vendite è € {totale_revenue:,.2f}"
             elif "canali di vendita" in domanda.lower():
-                if 'MainChannel' in data.columns:
-                    canali = data['MainChannel'].unique()
+                if 'Canale' in data.columns:
+                    canali = data['Canale'].unique()
                     risposta = f"I principali canali di vendita sono: {', '.join(canali)}"
                 else:
                     risposta = "Non sono disponibili informazioni sui canali di vendita."
@@ -324,6 +269,8 @@ elif 'data' in st.session_state:
                 model = LinearRegression()
                 model.fit(X, y)
                 last_date = df_pred['Contratti Chiusi'].max()
+                future_dates = pd.date_range(start=last_date + pd.Tim)
+                # Continua dalla sezione AI Predittiva
                 future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=90, freq='D')
                 future_dates_ordinal = future_dates.map(pd.Timestamp.toordinal).values.reshape(-1, 1)
                 predictions = model.predict(future_dates_ordinal)
@@ -368,8 +315,8 @@ elif 'data' in st.session_state:
             consigli = []
             
             # Analisi del canale più performante
-            if 'MainChannel' in data.columns and not canali_perf.empty:
-                top_canale = canali_perf['Conversioni'].idxmax()
+            if 'Canale' in data.columns and not canali_perf.empty:
+                top_canale = canali_perf.loc[canali_perf['Conversioni'].idxmax()]['Canale']
                 consigli.append(f"**Suggerimento sul canale di vendita:**\n"
                               f"Il canale '{top_canale}' mostra le migliori performance in termini di conversioni. "
                               f"Considera di aumentare gli investimenti su questo canale e analizza le best practice "
