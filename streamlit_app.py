@@ -95,48 +95,62 @@ if sezione == "Caricamento Dati":
         # Pulisce la cache prima di caricare nuovi dati
         st.cache_data.clear()
 
-        # Legge il file Excel ignorando la prima colonna come indice
-        data = pd.read_excel(uploaded_file, header=0, index_col=0)
+        # Ottiene i nomi dei fogli nel file Excel
+        xls = pd.ExcelFile(uploaded_file)
+        sheet_names = xls.sheet_names
 
-        # Rimuove eventuali spazi nei nomi delle colonne
-        data.columns = data.columns.str.strip()
+        # Cerca il foglio che contiene 'input' (case-insensitive)
+        sheet_name = None
+        for name in sheet_names:
+            if 'input' in name.lower():
+                sheet_name = name
+                break
 
-        # Verifica se le colonne sono state lette correttamente
-        expected_columns = ['Sales', 'Canale', 'Meeting FIssato', 'Meeting Effettuato (SQL)', 'Offerte Inviate', 'Analisi Firmate', 'Contratti Chiusi', 'Persi', 'SQL', 'Stato', 'Servizio', 'Valore Tot €', 'Azienda', 'Nome Persona', 'Ruolo', 'Dimensioni', 'Settore', 'Come mai ha accettato?', 'Obiezioni', 'Note']
-        missing_columns = [col for col in expected_columns if col not in data.columns]
-        if missing_columns:
-            st.error(f"Le seguenti colonne sono mancanti nel file caricato: {', '.join(missing_columns)}")
+        if sheet_name is None:
+            st.error("Non è stato trovato alcun foglio che contenga 'input' nel nome.")
         else:
-            # Pulizia delle colonne di data
-            date_columns = ['Meeting FIssato', 'Meeting Effettuato (SQL)', 'Offerte Inviate', 'Analisi Firmate', 'Contratti Chiusi', 'Persi']
-            for col in date_columns:
-                if col in data.columns:
-                    data[col] = pd.to_datetime(data[col], dayfirst=True, errors='coerce')
+            # Legge il foglio corretto
+            data = pd.read_excel(uploaded_file, sheet_name=sheet_name)
 
-            # Pulizia della colonna 'Valore Tot €'
-            if 'Valore Tot €' in data.columns:
-                data['Valore Tot €'] = data['Valore Tot €'].astype(str).replace({'€': '', ',': '', '\.': ''}, regex=True)
-                data['Valore Tot €'] = pd.to_numeric(data['Valore Tot €'], errors='coerce').fillna(0)
+            # Rimuove eventuali spazi nei nomi delle colonne
+            data.columns = data.columns.str.strip()
+
+            # Verifica se le colonne sono state lette correttamente
+            expected_columns = ['Sales', 'Canale', 'Meeting FIssato', 'Meeting Effettuato (SQL)', 'Offerte Inviate', 'Analisi Firmate', 'Contratti Chiusi', 'Persi', 'SQL', 'Stato', 'Servizio', 'Valore Tot €', 'Azienda', 'Nome Persona', 'Ruolo', 'Dimensioni', 'Settore', 'Come mai ha accettato?', 'Obiezioni', 'Note']
+            missing_columns = [col for col in expected_columns if col not in data.columns]
+            if missing_columns:
+                st.error(f"Le seguenti colonne sono mancanti nel file caricato: {', '.join(missing_columns)}")
             else:
-                data['Valore Tot €'] = 0
+                # Pulizia delle colonne di data
+                date_columns = ['Meeting FIssato', 'Meeting Effettuato (SQL)', 'Offerte Inviate', 'Analisi Firmate', 'Contratti Chiusi', 'Persi']
+                for col in date_columns:
+                    if col in data.columns:
+                        data[col] = pd.to_datetime(data[col], dayfirst=True, errors='coerce')
 
-            # Processamento del campo 'Canale'
-            if 'Canale' in data.columns:
-                data['MainChannel'] = data['Canale'].apply(process_canale)
-            else:
-                data['MainChannel'] = 'Unknown'
+                # Pulizia della colonna 'Valore Tot €'
+                if 'Valore Tot €' in data.columns:
+                    data['Valore Tot €'] = data['Valore Tot €'].astype(str).replace({'€': '', ',': '', '\.': ''}, regex=True)
+                    data['Valore Tot €'] = pd.to_numeric(data['Valore Tot €'], errors='coerce').fillna(0)
+                else:
+                    data['Valore Tot €'] = 0
 
-            # Aggiunta del campo 'TeamMember' dal campo 'Sales'
-            if 'Sales' in data.columns:
-                data['TeamMember'] = data['Sales'].str.title()
-            else:
-                data['TeamMember'] = None
+                # Processamento del campo 'Canale'
+                if 'Canale' in data.columns:
+                    data['MainChannel'] = data['Canale'].apply(process_canale)
+                else:
+                    data['MainChannel'] = 'Unknown'
 
-            st.success("Dati caricati con successo!")
-            if st.checkbox("Mostra dati grezzi"):
-                st.subheader("Dati Grezzi")
-                st.write(data)
-            st.session_state['data'] = data
+                # Aggiunta del campo 'TeamMember' dal campo 'Sales'
+                if 'Sales' in data.columns:
+                    data['TeamMember'] = data['Sales'].str.title()
+                else:
+                    data['TeamMember'] = None
+
+                st.success("Dati caricati con successo!")
+                if st.checkbox("Mostra dati grezzi"):
+                    st.subheader("Dati Grezzi")
+                    st.write(data)
+                st.session_state['data'] = data
 
     else:
         st.warning("Per favore, carica un file Excel per iniziare.")
@@ -157,7 +171,7 @@ elif 'data' in st.session_state:
     tempo_medio_chiusura = data.loc[data['Contratti Chiusi'].notnull(), 'Days_to_Close'].mean()
 
     # Pipeline Velocity (Velocità della pipeline)
-    pipeline_velocity = totale_revenue / tempo_medio_chiusura if tempo_medio_chiusura > 0 else 0
+    pipeline_velocity = totale_revenue / tempo_medio_chiusura if tempo_medio_chiusura and tempo_medio_chiusura > 0 else 0
 
     # Calcolo metriche aggiuntive per AI
     totale_vinti_e_persi = totale_vinti + totale_persi
