@@ -291,7 +291,13 @@ if 'data' in st.session_state:
         )
 
         # Visualizzazione tabella
-        st.dataframe(summary_df.style.format({"Total Closed Won Revenue": "€{:.2f}", "Average Contract Value": "€{:.2f}", "Pipeline Velocity": "€{:.2f}", "Win Rate": "{:.2f}%", "Closed Won Avg. Sales Cycle": "{:.2f}"}))
+        st.dataframe(summary_df.style.format({
+            "Total Closed Won Revenue": "€{:.2f}",
+            "Average Contract Value": "€{:.2f}",
+            "Pipeline Velocity": "€{:.2f}",
+            "Win Rate": "{:.2f}%",
+            "Closed Won Avg. Sales Cycle": "{:.2f}"
+        }))
 
     # Visualizzazioni grafiche
     st.subheader("Visualizzazioni Grafiche")
@@ -314,11 +320,21 @@ if 'data' in st.session_state:
         'Valore Tot €': 'Total Closed Won Revenue',
     }).reset_index()
 
+    # Calcolo del Month-over-Month Growth
+    trend_df = trend_df.sort_values('Mese')
+    trend_df['Month-over-Month Growth'] = trend_df.groupby('MainChannel')[metrica_selezionata].pct_change() * 100
+
     # Grafico del trend temporale
     fig_trend = px.line(trend_df, x='Mese', y=metrica_selezionata, color='MainChannel',
                         title=f"Trend temporale di {metrica_selezionata}",
                         markers=True)
     st.plotly_chart(fig_trend, use_container_width=True)
+
+    # Grafico del Month-over-Month Growth
+    st.subheader("Month-over-Month Growth")
+    fig_mom = px.bar(trend_df, x='Mese', y='Month-over-Month Growth', color='MainChannel',
+                     title=f"Month-over-Month Growth di {metrica_selezionata}")
+    st.plotly_chart(fig_mom, use_container_width=True)
 
     # Grafico di confronto canali
     st.subheader("Confronto tra Canali")
@@ -362,11 +378,11 @@ if 'data' in st.session_state:
     periodo_selezionato = st.selectbox("Seleziona il periodo per il confronto", periodi)
 
     if periodo_selezionato == 'Mese':
-        data_filtered['Periodo'] = data_filtered['Opportunity_Created'].dt.to_period('M')
+        data_filtered['Periodo'] = data_filtered['Opportunity_Created'].dt.to_period('M').astype(str)
     elif periodo_selezionato == 'Trimestre':
-        data_filtered['Periodo'] = data_filtered['Opportunity_Created'].dt.to_period('Q')
+        data_filtered['Periodo'] = data_filtered['Opportunity_Created'].dt.to_period('Q').astype(str)
     elif periodo_selezionato == 'Anno':
-        data_filtered['Periodo'] = data_filtered['Opportunity_Created'].dt.to_period('A')
+        data_filtered['Periodo'] = data_filtered['Opportunity_Created'].dt.to_period('A').astype(str)
 
     confronto_temporale_df = data_filtered.groupby('Periodo').agg({
         'Opportunity_Created': 'count',
@@ -380,12 +396,23 @@ if 'data' in st.session_state:
         'Valore Tot €': 'Total Closed Won Revenue',
     }).reset_index()
 
+    # Calcolo del Month-over-Month Growth per ogni metrica
+    confronto_temporale_df = confronto_temporale_df.sort_values('Periodo')
+    for metrica in metriche_disponibili:
+        confronto_temporale_df[f"{metrica} MoM Growth (%)"] = confronto_temporale_df[metrica].pct_change() * 100
+
     # Grafico per il confronto temporale
     fig_confronto_temporale = px.bar(confronto_temporale_df, x='Periodo', y=metriche_disponibili, barmode='group',
                                      title=f"Confronto Temporale - {periodo_selezionato}")
     st.plotly_chart(fig_confronto_temporale, use_container_width=True)
 
-    # Interazioni avanzate gestite da Plotly
+    # Visualizzazione del MoM Growth
+    st.subheader("Month-over-Month Growth per Metriche Principali")
+    metrica_mom = st.selectbox("Seleziona la metrica per visualizzare il MoM Growth", metriche_disponibili)
+    fig_mom_temporale = px.line(confronto_temporale_df, x='Periodo', y=f"{metrica_mom} MoM Growth (%)",
+                                title=f"MoM Growth di {metrica_mom}",
+                                markers=True)
+    st.plotly_chart(fig_mom_temporale, use_container_width=True)
 
 else:
     st.warning("Per favore, carica i dati nella sezione 'Caricamento Dati' per continuare.")
