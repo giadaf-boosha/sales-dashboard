@@ -356,22 +356,23 @@ if 'data' in st.session_state:
         summary_df['Pipeline Velocity'] = (summary_df['Opportunità Create'] * (summary_df['Win Rate']/100) * summary_df['Valore Medio Contratto']) / summary_df['Tempo Medio di Chiusura (giorni)']
         summary_df['Pipeline Velocity'] = summary_df['Pipeline Velocity'].fillna(0)
 
-        # Selezione delle colonne da visualizzare
-        columns_to_display = ['Opportunità Create', 'Opportunità Vinte', 'Opportunità Perse', 'Revenue Totale', 'Valore Medio Contratto', 'Win Rate', 'Pipeline Velocity']
+        # Aggiunta della colonna 'Tempo Medio di Chiusura (giorni)' alle colonne da visualizzare
+        columns_to_display = ['Opportunità Create', 'Opportunità Vinte', 'Opportunità Perse', 'Revenue Totale', 'Valore Medio Contratto', 'Win Rate', 'Tempo Medio di Chiusura (giorni)', 'Pipeline Velocity']
 
         # Formattazione dei dati
         summary_df_formatted = summary_df[columns_to_display].style.format({
             "Revenue Totale": "€{:.2f}",
             "Valore Medio Contratto": "€{:.2f}",
             "Pipeline Velocity": "€{:.2f}",
-            "Win Rate": "{:.2f}%"
+            "Win Rate": "{:.2f}%",
+            "Tempo Medio di Chiusura (giorni)": "{:.2f}"
         }).highlight_max(subset=['Opportunità Create', 'Revenue Totale', 'Win Rate', 'Pipeline Velocity'], color='#d4edda').highlight_min(subset=['Tempo Medio di Chiusura (giorni)'], color='#f8d7da')
 
         # Visualizzazione tabella
         st.dataframe(summary_df_formatted, use_container_width=True)
 
         # Esportazione dati
-        csv = summary_df.to_csv(index=True).encode('utf-8')
+        csv = summary_df[columns_to_display].to_csv(index=True).encode('utf-8')
         st.download_button(
             label="Scarica dati come CSV",
             data=csv,
@@ -456,16 +457,17 @@ if 'data' in st.session_state:
     # Ordinamento per valore nei grafici
     confronto_df = confronto_df.sort_values(by=metrica_canali, ascending=False)
 
-    fig_confronto = px.bar(confronto_df, x='MainChannel', y=metrica_canali,
+    fig_confronto = px.bar(confronto_df, x=metrica_canali, y='MainChannel',
                            title=f"Confronto Canali - {metrica_canali}",
                            text=metrica_canali,
+                           orientation='h',
                            color='MainChannel',
                            color_discrete_sequence=px.colors.qualitative.Safe)
     fig_confronto.update_layout(
-        xaxis_title="Canale",
-        yaxis_title=metrica_canali,
+        xaxis_title=metrica_canali,
+        yaxis_title="Canale",
         showlegend=False,
-        hovermode="x unified"
+        hovermode="y"
     )
     st.plotly_chart(fig_confronto, use_container_width=True)
 
