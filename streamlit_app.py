@@ -14,6 +14,33 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Funzione per gestire il tema chiaro/scuro
+def get_theme():
+    theme = st.sidebar.selectbox("Seleziona Tema", ["Chiaro", "Scuro"])
+    if theme == "Scuro":
+        st.markdown("""
+            <style>
+            /* Tema scuro */
+            html, body, [class*="css"]  {
+                background-color: #2E2E2E;
+                color: #FFFFFF;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+            <style>
+            /* Tema chiaro */
+            html, body, [class*="css"]  {
+                background-color: #FFFFFF;
+                color: #333333;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
+# Imposta il tema
+get_theme()
+
 # Stile personalizzato
 st.markdown("""
     <style>
@@ -22,8 +49,6 @@ st.markdown("""
 
     html, body, [class*="css"]  {
         font-family: 'Inter', sans-serif;
-        background-color: #ffffff;
-        color: #333333;
     }
 
     /* Stile delle metriche */
@@ -38,6 +63,32 @@ st.markdown("""
         border-radius: 8px;
         height: 3em;
         font-size: 16px;
+    }
+
+    /* Grafici espandibili */
+    .collapsible {
+        background-color: #007aff;
+        color: white;
+        cursor: pointer;
+        padding: 10px;
+        width: 100%;
+        text-align: left;
+        border: none;
+        outline: none;
+        font-size: 15px;
+        margin-bottom: 5px;
+    }
+
+    .active, .collapsible:hover {
+        background-color: #005bb5;
+    }
+
+    .content {
+        padding: 0 18px;
+        display: none;
+        overflow: hidden;
+        background-color: #f1f1f1;
+        margin-bottom: 10px;
     }
 
     </style>
@@ -202,13 +253,30 @@ if 'data' in st.session_state:
 
     # Selezione dei filtri
     st.sidebar.header("Filtri")
-    # Periodo temporale
-    min_date = data['Opportunity_Created'].min()
-    max_date = data['Opportunity_Created'].max()
-    if pd.isnull(min_date) or pd.isnull(max_date):
-        min_date = datetime.today()
-        max_date = datetime.today()
-    start_date, end_date = st.sidebar.date_input("Seleziona il periodo", [min_date, max_date])
+    # Periodo temporale specifico per mese/trimestre/anno
+    periodo_temporale = st.sidebar.selectbox("Filtro Temporale", ["Intervallo Date", "Mese", "Trimestre", "Anno"])
+
+    if periodo_temporale == "Intervallo Date":
+        # Periodo temporale
+        min_date = data['Opportunity_Created'].min()
+        max_date = data['Opportunity_Created'].max()
+        if pd.isnull(min_date) or pd.isnull(max_date):
+            min_date = datetime.today()
+            max_date = datetime.today()
+        start_date, end_date = st.sidebar.date_input("Seleziona il periodo", [min_date, max_date])
+        date_mask = (data['Opportunity_Created'] >= pd.to_datetime(start_date)) & (data['Opportunity_Created'] <= pd.to_datetime(end_date))
+    elif periodo_temporale == "Mese":
+        mesi = data['Opportunity_Created'].dt.to_period('M').unique().astype(str)
+        selected_months = st.sidebar.multiselect("Seleziona Mese/i", mesi, default=mesi)
+        date_mask = data['Opportunity_Created'].dt.to_period('M').astype(str).isin(selected_months)
+    elif periodo_temporale == "Trimestre":
+        trimestri = data['Opportunity_Created'].dt.to_period('Q').unique().astype(str)
+        selected_quarters = st.sidebar.multiselect("Seleziona Trimestre/i", trimestri, default=trimestri)
+        date_mask = data['Opportunity_Created'].dt.to_period('Q').astype(str).isin(selected_quarters)
+    elif periodo_temporale == "Anno":
+        anni = data['Opportunity_Created'].dt.year.unique()
+        selected_years = st.sidebar.multiselect("Seleziona Anno/i", anni, default=anni)
+        date_mask = data['Opportunity_Created'].dt.year.isin(selected_years)
 
     # Canale
     canali = data['MainChannel'].unique()
@@ -228,8 +296,7 @@ if 'data' in st.session_state:
 
     # Filtro dei dati in base alle selezioni
     data_filtered = data[
-        (data['Opportunity_Created'] >= pd.to_datetime(start_date)) &
-        (data['Opportunity_Created'] <= pd.to_datetime(end_date)) &
+        date_mask &
         (data['MainChannel'].isin(selected_canali)) &
         (data['TeamMember'].isin(selected_sales_reps)) &
         (data['Servizio'].isin(selected_servizi)) &
@@ -299,16 +366,36 @@ if 'data' in st.session_state:
             "Closed Won Avg. Sales Cycle": "{:.2f}"
         }))
 
+        # Implementazione del drill-down per canale
+        st.markdown("**Clicca su un canale nella tabella per visualizzare dettagli specifici.**")
+        selected_channel = st.selectbox("Seleziona un canale per il drill-down", summary_df.index)
+        if selected_channel:
+            st.subheader(f"Dettagli per {selected_channel}")
+            channel_data = data_filtered[data_filtered['MainChannel'] == selected_channel]
+            st.write(channel_data)
+
     # Visualizzazioni grafiche
     st.subheader("Visualizzazioni Grafiche")
+
+    # Grafici espandibili/collassabili
+    def collapsible_section(label, content):
+        st.markdown(f"<button class='collapsible'>{label}</button><div class='content'>{content}</div>", unsafe_allow_html=True)
 
     # Selezione della metrica per il trend temporale
     metriche_disponibili = ['Total Opportunities Created', 'Total Closed Won Opportunities', 'Total Closed Lost Opportunities', 'Total Closed Won Revenue']
     metrica_selezionata = st.selectbox("Seleziona la metrica per il trend temporale", metriche_disponibili)
 
     # Preparazione dei dati per il trend temporale
-    data_filtered['Mese'] = data_filtered['Opportunity_Created'].dt.to_period('M').astype(str)
-    trend_df = data_filtered.groupby(['Mese', 'MainChannel']).agg({
+    if periodo_temporale == "Mese":
+        data_filtered['Periodo'] = data_filtered['Opportunity_Created'].dt.to_period('M').astype(str)
+    elif periodo_temporale == "Trimestre":
+        data_filtered['Periodo'] = data_filtered['Opportunity_Created'].dt.to_period('Q').astype(str)
+    elif periodo_temporale == "Anno":
+        data_filtered['Periodo'] = data_filtered['Opportunity_Created'].dt.to_period('A').astype(str)
+    else:
+        data_filtered['Periodo'] = data_filtered['Opportunity_Created'].dt.to_period('D').astype(str)
+
+    trend_df = data_filtered.groupby(['Periodo', 'MainChannel']).agg({
         'Opportunity_Created': 'count',
         'Closed_Won': lambda x: x.notnull().sum(),
         'Closed_Lost': lambda x: x.notnull().sum(),
@@ -320,21 +407,26 @@ if 'data' in st.session_state:
         'Valore Tot €': 'Total Closed Won Revenue',
     }).reset_index()
 
-    # Calcolo del Month-over-Month Growth
-    trend_df = trend_df.sort_values('Mese')
-    trend_df['Month-over-Month Growth'] = trend_df.groupby('MainChannel')[metrica_selezionata].pct_change() * 100
+    # Calcolo del Growth (MoM, QoQ, YoY)
+    trend_df = trend_df.sort_values('Periodo')
+    trend_df['Growth (%)'] = trend_df.groupby('MainChannel')[metrica_selezionata].pct_change() * 100
 
     # Grafico del trend temporale
-    fig_trend = px.line(trend_df, x='Mese', y=metrica_selezionata, color='MainChannel',
+    fig_trend = px.line(trend_df, x='Periodo', y=metrica_selezionata, color='MainChannel',
                         title=f"Trend temporale di {metrica_selezionata}",
                         markers=True)
+    fig_trend.update_xaxes(rangeslider_visible=True)
+    # Ordinamento per valore
+    fig_trend.update_layout(xaxis={'categoryorder':'category ascending'})
+
     st.plotly_chart(fig_trend, use_container_width=True)
 
-    # Grafico del Month-over-Month Growth
-    st.subheader("Month-over-Month Growth")
-    fig_mom = px.bar(trend_df, x='Mese', y='Month-over-Month Growth', color='MainChannel',
-                     title=f"Month-over-Month Growth di {metrica_selezionata}")
-    st.plotly_chart(fig_mom, use_container_width=True)
+    # Grafico del Growth
+    st.subheader(f"Growth di {metrica_selezionata}")
+    fig_growth = px.bar(trend_df, x='Periodo', y='Growth (%)', color='MainChannel',
+                        title=f"Growth di {metrica_selezionata}",
+                        barmode='group')
+    st.plotly_chart(fig_growth, use_container_width=True)
 
     # Grafico di confronto canali
     st.subheader("Confronto tra Canali")
@@ -352,27 +444,47 @@ if 'data' in st.session_state:
         'Valore Tot €': 'Total Closed Won Revenue',
     }).reset_index()
 
+    # Ordinamento per valore nei grafici
+    confronto_df = confronto_df.sort_values(by=metrica_canali, ascending=False)
+
     fig_confronto = px.bar(confronto_df, x='MainChannel', y=metrica_canali, color='MainChannel',
                            title=f"Confronto Canali - {metrica_canali}",
                            text=metrica_canali)
     st.plotly_chart(fig_confronto, use_container_width=True)
 
-    # Pipeline Funnel
-    st.subheader("Pipeline Funnel")
+    # Implementazione del click per drill-down nei grafici
+    st.markdown("**Clicca su una barra nel grafico per visualizzare dettagli specifici.**")
+    selected_bar = st.selectbox("Seleziona un canale per il drill-down", confronto_df['MainChannel'])
+    if selected_bar:
+        st.subheader(f"Dettagli per {selected_bar}")
+        channel_data = data_filtered[data_filtered['MainChannel'] == selected_bar]
+        st.write(channel_data)
+
+    # Pipeline Funnel con breakdown per canale
+    st.subheader("Pipeline Funnel per Canale")
+    funnel_option = st.selectbox("Seleziona il canale per visualizzare il funnel", ['Tutti'] + list(data_filtered['MainChannel'].unique()))
+
+    if funnel_option == 'Tutti':
+        funnel_data = data_filtered
+        funnel_title = "Pipeline Funnel - Tutti i Canali"
+    else:
+        funnel_data = data_filtered[data_filtered['MainChannel'] == funnel_option]
+        funnel_title = f"Pipeline Funnel - {funnel_option}"
+
     funnel_stages = ['Total Opportunities Created', 'Total Closed Won Opportunities', 'Total Closed Lost Opportunities']
     funnel_values = [
-        data_filtered['Opportunity_Created'].count(),
-        data_filtered['Closed_Won'].notnull().sum(),
-        data_filtered['Closed_Lost'].notnull().sum()
+        funnel_data['Opportunity_Created'].count(),
+        funnel_data['Closed_Won'].notnull().sum(),
+        funnel_data['Closed_Lost'].notnull().sum()
     ]
     fig_funnel = go.Figure(go.Funnel(
         y=funnel_stages,
         x=funnel_values,
         textinfo="value+percent initial"))
-    fig_funnel.update_layout(title="Pipeline Funnel")
+    fig_funnel.update_layout(title=funnel_title)
     st.plotly_chart(fig_funnel, use_container_width=True)
 
-    # Confronti temporali
+    # Confronti temporali QoQ e YoY
     st.subheader("Confronti Temporali")
     periodi = ['Mese', 'Trimestre', 'Anno']
     periodo_selezionato = st.selectbox("Seleziona il periodo per il confronto", periodi)
@@ -396,23 +508,38 @@ if 'data' in st.session_state:
         'Valore Tot €': 'Total Closed Won Revenue',
     }).reset_index()
 
-    # Calcolo del Month-over-Month Growth per ogni metrica
+    # Calcolo del Growth per ogni metrica
     confronto_temporale_df = confronto_temporale_df.sort_values('Periodo')
     for metrica in metriche_disponibili:
-        confronto_temporale_df[f"{metrica} MoM Growth (%)"] = confronto_temporale_df[metrica].pct_change() * 100
+        confronto_temporale_df[f"{metrica} Growth (%)"] = confronto_temporale_df[metrica].pct_change() * 100
 
     # Grafico per il confronto temporale
     fig_confronto_temporale = px.bar(confronto_temporale_df, x='Periodo', y=metriche_disponibili, barmode='group',
                                      title=f"Confronto Temporale - {periodo_selezionato}")
     st.plotly_chart(fig_confronto_temporale, use_container_width=True)
 
-    # Visualizzazione del MoM Growth
-    st.subheader("Month-over-Month Growth per Metriche Principali")
-    metrica_mom = st.selectbox("Seleziona la metrica per visualizzare il MoM Growth", metriche_disponibili)
-    fig_mom_temporale = px.line(confronto_temporale_df, x='Periodo', y=f"{metrica_mom} MoM Growth (%)",
-                                title=f"MoM Growth di {metrica_mom}",
-                                markers=True)
-    st.plotly_chart(fig_mom_temporale, use_container_width=True)
+    # Visualizzazione del Growth per la metrica selezionata
+    st.subheader(f"Growth di {metrica_selezionata} nel tempo")
+    fig_growth_temporale = px.line(confronto_temporale_df, x='Periodo', y=f"{metrica_selezionata} Growth (%)",
+                                   title=f"Growth di {metrica_selezionata} - {periodo_selezionato}",
+                                   markers=True)
+    st.plotly_chart(fig_growth_temporale, use_container_width=True)
+
+    # Zoom temporale avanzato
+    st.subheader("Zoom Temporale Avanzato")
+    zoom_options = ['Tutto', 'Ultimi 12 periodi', 'Ultimi 6 periodi', 'Ultimi 3 periodi']
+    zoom_selection = st.selectbox("Seleziona il range temporale", zoom_options)
+
+    if zoom_selection == 'Tutto':
+        zoom_df = trend_df
+    else:
+        n_periods = int(zoom_selection.split(' ')[1])
+        zoom_df = trend_df.tail(n_periods)
+
+    fig_zoom = px.line(zoom_df, x='Periodo', y=metrica_selezionata, color='MainChannel',
+                       title=f"{metrica_selezionata} - {zoom_selection}",
+                       markers=True)
+    st.plotly_chart(fig_zoom, use_container_width=True)
 
 else:
     st.warning("Per favore, carica i dati nella sezione 'Caricamento Dati' per continuare.")
@@ -423,4 +550,24 @@ st.markdown("""
     <div style='text-align: center; color: #888888;'>
         © 2024 - Boosha AI + Result Consulting.
     </div>
+    """, unsafe_allow_html=True)
+
+# Script per i grafici espandibili/collassabili
+st.markdown("""
+    <script>
+    var coll = document.getElementsByClassName("collapsible");
+    var i;
+
+    for (i = 0; i < coll.length; i++) {
+      coll[i].addEventListener("click", function() {
+        this.classList.toggle("active");
+        var content = this.nextElementSibling;
+        if (content.style.display === "block") {
+          content.style.display = "none";
+        } else {
+          content.style.display = "block";
+        }
+      });
+    }
+    </script>
     """, unsafe_allow_html=True)
