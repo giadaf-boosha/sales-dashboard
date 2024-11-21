@@ -4,7 +4,6 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
-from sklearn.linear_model import LinearRegression
 
 # Configurazione della pagina
 st.set_page_config(
@@ -25,17 +24,47 @@ st.markdown("""
     }
 
     /* Stile delle metriche */
-    .stMetricLabel, .stMetricValue {
-        color: #007aff;
+    .metric-container {
+        background-color: #f0f2f6;
+        padding: 10px;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .metric-label {
+        font-size: 14px;
+        color: #6c757d;
+    }
+    .metric-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #007bff;
     }
 
     /* Pulsanti e interattività */
     .stButton>button {
         color: #ffffff;
-        background-color: #007aff;
+        background-color: #007bff;
         border-radius: 8px;
         height: 3em;
         font-size: 16px;
+    }
+
+    /* Tabelle */
+    .dataframe {
+        border: none;
+    }
+    .dataframe th {
+        background-color: #007bff;
+        color: white;
+        text-align: center;
+    }
+    .dataframe td {
+        text-align: center;
+    }
+
+    /* Grafici */
+    .plotly-graph-div .legend .traces .legendtoggle {
+        cursor: pointer;
     }
 
     </style>
@@ -254,21 +283,57 @@ if 'data' in st.session_state:
     metrics = calculate_metrics(data_filtered)
 
     # Sezione metriche chiave
-    st.subheader("Key Metrics")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Opportunità Totali", metrics['totale_opportunita'])
-    col2.metric("Opportunità Vinte", metrics['totale_vinti'])
-    col3.metric("Opportunità Perse", metrics['totale_persi'])
-    col4.metric("Revenue Totale", f"€{metrics['totale_revenue']:,.2f}")
+    st.subheader("Key Performance Indicators")
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Win Rate", f"{metrics['win_rate']:.2f}%")
-    col2.metric("Lost Rate", f"{metrics['lost_rate']:.2f}%")
-    col3.metric("Tempo Medio di Chiusura (giorni)", f"{metrics['tempo_medio_chiusura']:.2f}" if not np.isnan(metrics['tempo_medio_chiusura']) else "N/A")
-    col4.metric("Pipeline Velocity", f"€{metrics['pipeline_velocity']:,.2f}" if not np.isnan(metrics['pipeline_velocity']) else "N/A")
+    # Creazione di un layout a 3 colonne per i KPI
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("""
+        <div class="metric-container">
+            <div class="metric-label">Opportunità Totali</div>
+            <div class="metric-value">{}</div>
+        </div>
+        """.format(metrics['totale_opportunita']), unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="metric-container">
+            <div class="metric-label">Win Rate</div>
+            <div class="metric-value">{:.2f}%</div>
+        </div>
+        """.format(metrics['win_rate']), unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("""
+        <div class="metric-container">
+            <div class="metric-label">Opportunità Vinte</div>
+            <div class="metric-value">{}</div>
+        </div>
+        """.format(metrics['totale_vinti']), unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="metric-container">
+            <div class="metric-label">Lost Rate</div>
+            <div class="metric-value">{:.2f}%</div>
+        </div>
+        """.format(metrics['lost_rate']), unsafe_allow_html=True)
+
+    with col3:
+        st.markdown("""
+        <div class="metric-container">
+            <div class="metric-label">Revenue Totale</div>
+            <div class="metric-value">€{:,.2f}</div>
+        </div>
+        """.format(metrics['totale_revenue']), unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="metric-container">
+            <div class="metric-label">Pipeline Velocity</div>
+            <div class="metric-value">€{:,.2f}</div>
+        </div>
+        """.format(metrics['pipeline_velocity']), unsafe_allow_html=True)
 
     # Tabella riepilogativa
-    st.subheader("Tabella Riepilogativa")
+    st.subheader("Tabella Riepilogativa per Canale")
 
     grouping_column = 'MainChannel'
     if grouping_column in data_filtered.columns:
@@ -279,21 +344,31 @@ if 'data' in st.session_state:
             'Valore Tot €': 'sum',
             'Days_to_Close': 'mean'
         }).rename(columns={
-            'Opportunity_Created': 'Total Opportunities Created',
-            'Closed_Lost': 'Total Closed Lost Opportunities',
-            'Closed_Won': 'Total Closed Won Opportunities',
-            'Valore Tot €': 'Total Closed Won Revenue',
-            'Days_to_Close': 'Closed Won Avg. Sales Cycle'
+            'Opportunity_Created': 'Opportunità Create',
+            'Closed_Lost': 'Opportunità Perse',
+            'Closed_Won': 'Opportunità Vinte',
+            'Valore Tot €': 'Revenue Totale',
+            'Days_to_Close': 'Tempo Medio di Chiusura (giorni)'
         })
 
-        summary_df['Average Contract Value'] = summary_df['Total Closed Won Revenue'] / summary_df['Total Closed Won Opportunities']
-        summary_df['Win Rate'] = (summary_df['Total Closed Won Opportunities'] / (summary_df['Total Closed Won Opportunities'] + summary_df['Total Closed Lost Opportunities'])) * 100
-        summary_df['Pipeline Velocity'] = (summary_df['Total Opportunities Created'] * (summary_df['Win Rate']/100) * summary_df['Average Contract Value']) / summary_df['Closed Won Avg. Sales Cycle']
+        summary_df['Valore Medio Contratto'] = summary_df['Revenue Totale'] / summary_df['Opportunità Vinte']
+        summary_df['Win Rate'] = (summary_df['Opportunità Vinte'] / (summary_df['Opportunità Vinte'] + summary_df['Opportunità Perse'])) * 100
+        summary_df['Pipeline Velocity'] = (summary_df['Opportunità Create'] * (summary_df['Win Rate']/100) * summary_df['Valore Medio Contratto']) / summary_df['Tempo Medio di Chiusura (giorni)']
         summary_df['Pipeline Velocity'] = summary_df['Pipeline Velocity'].fillna(0)
 
-        # Funzionalità di ordinamento
-        sort_by = st.selectbox("Ordina per", summary_df.columns, index=0, key='sort_by_summary')
-        summary_df = summary_df.sort_values(by=sort_by, ascending=False)
+        # Selezione delle colonne da visualizzare
+        columns_to_display = ['Opportunità Create', 'Opportunità Vinte', 'Opportunità Perse', 'Revenue Totale', 'Valore Medio Contratto', 'Win Rate', 'Pipeline Velocity']
+
+        # Formattazione dei dati
+        summary_df_formatted = summary_df[columns_to_display].style.format({
+            "Revenue Totale": "€{:.2f}",
+            "Valore Medio Contratto": "€{:.2f}",
+            "Pipeline Velocity": "€{:.2f}",
+            "Win Rate": "{:.2f}%"
+        }).highlight_max(subset=['Opportunità Create', 'Revenue Totale', 'Win Rate', 'Pipeline Velocity'], color='#d4edda').highlight_min(subset=['Tempo Medio di Chiusura (giorni)'], color='#f8d7da')
+
+        # Visualizzazione tabella
+        st.dataframe(summary_df_formatted, use_container_width=True)
 
         # Esportazione dati
         csv = summary_df.to_csv(index=True).encode('utf-8')
@@ -305,28 +380,11 @@ if 'data' in st.session_state:
             key='download_summary'
         )
 
-        # Visualizzazione tabella
-        st.dataframe(summary_df.style.format({
-            "Total Closed Won Revenue": "€{:.2f}",
-            "Average Contract Value": "€{:.2f}",
-            "Pipeline Velocity": "€{:.2f}",
-            "Win Rate": "{:.2f}%",
-            "Closed Won Avg. Sales Cycle": "{:.2f}"
-        }))
-
-        # Implementazione del drill-down per canale
-        st.markdown("**Clicca su un canale nella tabella per visualizzare dettagli specifici.**")
-        selected_channel = st.selectbox("Seleziona un canale per il drill-down", summary_df.index, key='selected_channel')
-        if selected_channel:
-            st.subheader(f"Dettagli per {selected_channel}")
-            channel_data = data_filtered[data_filtered['MainChannel'] == selected_channel]
-            st.write(channel_data)
-
     # Visualizzazioni grafiche
     st.subheader("Visualizzazioni Grafiche")
 
     # Selezione della metrica per il trend temporale
-    metriche_disponibili = ['Total Opportunities Created', 'Total Closed Won Opportunities', 'Total Closed Lost Opportunities', 'Total Closed Won Revenue']
+    metriche_disponibili = ['Opportunità Create', 'Opportunità Vinte', 'Opportunità Perse', 'Revenue Totale']
     metrica_selezionata = st.selectbox("Seleziona la metrica per il trend temporale", metriche_disponibili, key='metrica_trend')
 
     # Preparazione dei dati per il trend temporale
@@ -339,37 +397,44 @@ if 'data' in st.session_state:
     else:
         data_filtered['Periodo'] = data_filtered['Opportunity_Created'].dt.to_period('D').astype(str)
 
-    trend_df = data_filtered.groupby(['Periodo', 'MainChannel']).agg({
+    trend_df = data_filtered.groupby(['Periodo']).agg({
         'Opportunity_Created': 'count',
         'Closed_Won': lambda x: x.notnull().sum(),
         'Closed_Lost': lambda x: x.notnull().sum(),
         'Valore Tot €': 'sum'
     }).rename(columns={
-        'Opportunity_Created': 'Total Opportunities Created',
-        'Closed_Won': 'Total Closed Won Opportunities',
-        'Closed_Lost': 'Total Closed Lost Opportunities',
-        'Valore Tot €': 'Total Closed Won Revenue',
+        'Opportunity_Created': 'Opportunità Create',
+        'Closed_Won': 'Opportunità Vinte',
+        'Closed_Lost': 'Opportunità Perse',
+        'Valore Tot €': 'Revenue Totale',
     }).reset_index()
 
-    # Calcolo del Growth (MoM, QoQ, YoY)
+    # Calcolo del Growth
     trend_df = trend_df.sort_values('Periodo')
-    trend_df['Growth (%)'] = trend_df.groupby('MainChannel')[metrica_selezionata].pct_change() * 100
+    trend_df['Growth (%)'] = trend_df[metrica_selezionata].pct_change() * 100
 
     # Grafico del trend temporale
-    fig_trend = px.line(trend_df, x='Periodo', y=metrica_selezionata, color='MainChannel',
+    fig_trend = px.line(trend_df, x='Periodo', y=metrica_selezionata,
                         title=f"Trend temporale di {metrica_selezionata}",
                         markers=True)
-    fig_trend.update_xaxes(rangeslider_visible=True)
-    # Ordinamento per valore
-    fig_trend.update_layout(xaxis={'categoryorder':'category ascending'})
-
+    fig_trend.update_layout(
+        xaxis_title="Periodo",
+        yaxis_title=metrica_selezionata,
+        legend_title="",
+        hovermode="x unified"
+    )
     st.plotly_chart(fig_trend, use_container_width=True)
 
     # Grafico del Growth
-    st.subheader(f"Growth di {metrica_selezionata}")
-    fig_growth = px.bar(trend_df, x='Periodo', y='Growth (%)', color='MainChannel',
-                        title=f"Growth di {metrica_selezionata}",
-                        barmode='group')
+    st.subheader(f"Variazione Percentuale di {metrica_selezionata}")
+    fig_growth = px.bar(trend_df, x='Periodo', y='Growth (%)',
+                        title=f"Variazione Percentuale di {metrica_selezionata} nel tempo",
+                        color_discrete_sequence=['#007bff'])
+    fig_growth.update_layout(
+        xaxis_title="Periodo",
+        yaxis_title="Growth (%)",
+        hovermode="x unified"
+    )
     st.plotly_chart(fig_growth, use_container_width=True)
 
     # Grafico di confronto canali
@@ -382,30 +447,30 @@ if 'data' in st.session_state:
         'Closed_Lost': lambda x: x.notnull().sum(),
         'Valore Tot €': 'sum'
     }).rename(columns={
-        'Opportunity_Created': 'Total Opportunities Created',
-        'Closed_Won': 'Total Closed Won Opportunities',
-        'Closed_Lost': 'Total Closed Lost Opportunities',
-        'Valore Tot €': 'Total Closed Won Revenue',
+        'Opportunity_Created': 'Opportunità Create',
+        'Closed_Won': 'Opportunità Vinte',
+        'Closed_Lost': 'Opportunità Perse',
+        'Valore Tot €': 'Revenue Totale',
     }).reset_index()
 
     # Ordinamento per valore nei grafici
     confronto_df = confronto_df.sort_values(by=metrica_canali, ascending=False)
 
-    fig_confronto = px.bar(confronto_df, x='MainChannel', y=metrica_canali, color='MainChannel',
+    fig_confronto = px.bar(confronto_df, x='MainChannel', y=metrica_canali,
                            title=f"Confronto Canali - {metrica_canali}",
-                           text=metrica_canali)
+                           text=metrica_canali,
+                           color='MainChannel',
+                           color_discrete_sequence=px.colors.qualitative.Safe)
+    fig_confronto.update_layout(
+        xaxis_title="Canale",
+        yaxis_title=metrica_canali,
+        showlegend=False,
+        hovermode="x unified"
+    )
     st.plotly_chart(fig_confronto, use_container_width=True)
 
-    # Implementazione del click per drill-down nei grafici
-    st.markdown("**Seleziona un canale per visualizzare dettagli specifici.**")
-    selected_bar = st.selectbox("Seleziona un canale per il drill-down", confronto_df['MainChannel'], key='selected_bar')
-    if selected_bar:
-        st.subheader(f"Dettagli per {selected_bar}")
-        channel_data = data_filtered[data_filtered['MainChannel'] == selected_bar]
-        st.write(channel_data)
-
     # Pipeline Funnel con breakdown per canale
-    st.subheader("Pipeline Funnel per Canale")
+    st.subheader("Pipeline Funnel")
     funnel_option = st.selectbox("Seleziona il canale per visualizzare il funnel", ['Tutti'] + list(data_filtered['MainChannel'].unique()), key='funnel_option')
 
     if funnel_option == 'Tutti':
@@ -415,20 +480,31 @@ if 'data' in st.session_state:
         funnel_data = data_filtered[data_filtered['MainChannel'] == funnel_option]
         funnel_title = f"Pipeline Funnel - {funnel_option}"
 
-    funnel_stages = ['Total Opportunities Created', 'Total Closed Won Opportunities', 'Total Closed Lost Opportunities']
+    funnel_stages = ['Opportunità Create', 'Opportunità Vinte', 'Opportunità Perse']
     funnel_values = [
         funnel_data['Opportunity_Created'].count(),
         funnel_data['Closed_Won'].notnull().sum(),
         funnel_data['Closed_Lost'].notnull().sum()
     ]
+
+    # Calcolo delle percentuali per il funnel
+    funnel_percentages = [f"{(value / funnel_values[0]) * 100:.2f}%" if funnel_values[0] > 0 else "0%" for value in funnel_values]
+
     fig_funnel = go.Figure(go.Funnel(
         y=funnel_stages,
         x=funnel_values,
-        textinfo="value+percent initial"))
-    fig_funnel.update_layout(title=funnel_title)
+        textinfo="value+percent previous",
+        textposition="inside",
+        texttemplate="<b>%{label}</b><br>%{value} (%{percentPrevious:.2%})"
+    ))
+    fig_funnel.update_layout(
+        title=funnel_title,
+        yaxis_title="Fase",
+        xaxis_title="Numero di Opportunità"
+    )
     st.plotly_chart(fig_funnel, use_container_width=True)
 
-    # Confronti temporali QoQ e YoY
+    # Confronti temporali
     st.subheader("Confronti Temporali")
     periodi = ['Mese', 'Trimestre', 'Anno']
     periodo_selezionato = st.selectbox("Seleziona il periodo per il confronto", periodi, key='periodo_confronto')
@@ -446,10 +522,10 @@ if 'data' in st.session_state:
         'Closed_Lost': lambda x: x.notnull().sum(),
         'Valore Tot €': 'sum'
     }).rename(columns={
-        'Opportunity_Created': 'Total Opportunities Created',
-        'Closed_Won': 'Total Closed Won Opportunities',
-        'Closed_Lost': 'Total Closed Lost Opportunities',
-        'Valore Tot €': 'Total Closed Won Revenue',
+        'Opportunity_Created': 'Opportunità Create',
+        'Closed_Won': 'Opportunità Vinte',
+        'Closed_Lost': 'Opportunità Perse',
+        'Valore Tot €': 'Revenue Totale',
     }).reset_index()
 
     # Calcolo del Growth per ogni metrica
@@ -458,16 +534,15 @@ if 'data' in st.session_state:
         confronto_temporale_df[f"{metrica} Growth (%)"] = confronto_temporale_df[metrica].pct_change() * 100
 
     # Grafico per il confronto temporale
-    fig_confronto_temporale = px.bar(confronto_temporale_df, x='Periodo', y=metriche_disponibili, barmode='group',
-                                     title=f"Confronto Temporale - {periodo_selezionato}")
+    fig_confronto_temporale = px.line(confronto_temporale_df, x='Periodo', y=metriche_disponibili,
+                                      title=f"Confronto Temporale delle Metriche - {periodo_selezionato}",
+                                      markers=True)
+    fig_confronto_temporale.update_layout(
+        xaxis_title="Periodo",
+        yaxis_title="Valore",
+        hovermode="x unified"
+    )
     st.plotly_chart(fig_confronto_temporale, use_container_width=True)
-
-    # Visualizzazione del Growth per la metrica selezionata
-    st.subheader(f"Growth di {metrica_selezionata} nel tempo")
-    fig_growth_temporale = px.line(confronto_temporale_df, x='Periodo', y=f"{metrica_selezionata} Growth (%)",
-                                   title=f"Growth di {metrica_selezionata} - {periodo_selezionato}",
-                                   markers=True)
-    st.plotly_chart(fig_growth_temporale, use_container_width=True)
 
     # Zoom temporale avanzato
     st.subheader("Zoom Temporale Avanzato")
@@ -480,9 +555,14 @@ if 'data' in st.session_state:
         n_periods = int(zoom_selection.split(' ')[1])
         zoom_df = trend_df.tail(n_periods)
 
-    fig_zoom = px.line(zoom_df, x='Periodo', y=metrica_selezionata, color='MainChannel',
+    fig_zoom = px.line(zoom_df, x='Periodo', y=metrica_selezionata,
                        title=f"{metrica_selezionata} - {zoom_selection}",
                        markers=True)
+    fig_zoom.update_layout(
+        xaxis_title="Periodo",
+        yaxis_title=metrica_selezionata,
+        hovermode="x unified"
+    )
     st.plotly_chart(fig_zoom, use_container_width=True)
 
 else:
