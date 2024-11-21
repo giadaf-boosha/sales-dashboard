@@ -14,33 +14,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Funzione per gestire il tema chiaro/scuro
-def get_theme():
-    theme = st.sidebar.selectbox("Seleziona Tema", ["Chiaro", "Scuro"])
-    if theme == "Scuro":
-        st.markdown("""
-            <style>
-            /* Tema scuro */
-            html, body, [class*="css"]  {
-                background-color: #2E2E2E;
-                color: #FFFFFF;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-            <style>
-            /* Tema chiaro */
-            html, body, [class*="css"]  {
-                background-color: #FFFFFF;
-                color: #333333;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-
-# Imposta il tema
-get_theme()
-
 # Stile personalizzato
 st.markdown("""
     <style>
@@ -63,32 +36,6 @@ st.markdown("""
         border-radius: 8px;
         height: 3em;
         font-size: 16px;
-    }
-
-    /* Grafici espandibili */
-    .collapsible {
-        background-color: #007aff;
-        color: white;
-        cursor: pointer;
-        padding: 10px;
-        width: 100%;
-        text-align: left;
-        border: none;
-        outline: none;
-        font-size: 15px;
-        margin-bottom: 5px;
-    }
-
-    .active, .collapsible:hover {
-        background-color: #005bb5;
-    }
-
-    .content {
-        padding: 0 18px;
-        display: none;
-        overflow: hidden;
-        background-color: #f1f1f1;
-        margin-bottom: 10px;
     }
 
     </style>
@@ -345,7 +292,7 @@ if 'data' in st.session_state:
         summary_df['Pipeline Velocity'] = summary_df['Pipeline Velocity'].fillna(0)
 
         # Funzionalità di ordinamento
-        sort_by = st.selectbox("Ordina per", summary_df.columns, index=0)
+        sort_by = st.selectbox("Ordina per", summary_df.columns, index=0, key='sort_by_summary')
         summary_df = summary_df.sort_values(by=sort_by, ascending=False)
 
         # Esportazione dati
@@ -355,6 +302,7 @@ if 'data' in st.session_state:
             data=csv,
             file_name='summary.csv',
             mime='text/csv',
+            key='download_summary'
         )
 
         # Visualizzazione tabella
@@ -368,7 +316,7 @@ if 'data' in st.session_state:
 
         # Implementazione del drill-down per canale
         st.markdown("**Clicca su un canale nella tabella per visualizzare dettagli specifici.**")
-        selected_channel = st.selectbox("Seleziona un canale per il drill-down", summary_df.index)
+        selected_channel = st.selectbox("Seleziona un canale per il drill-down", summary_df.index, key='selected_channel')
         if selected_channel:
             st.subheader(f"Dettagli per {selected_channel}")
             channel_data = data_filtered[data_filtered['MainChannel'] == selected_channel]
@@ -377,13 +325,9 @@ if 'data' in st.session_state:
     # Visualizzazioni grafiche
     st.subheader("Visualizzazioni Grafiche")
 
-    # Grafici espandibili/collassabili
-    def collapsible_section(label, content):
-        st.markdown(f"<button class='collapsible'>{label}</button><div class='content'>{content}</div>", unsafe_allow_html=True)
-
     # Selezione della metrica per il trend temporale
     metriche_disponibili = ['Total Opportunities Created', 'Total Closed Won Opportunities', 'Total Closed Lost Opportunities', 'Total Closed Won Revenue']
-    metrica_selezionata = st.selectbox("Seleziona la metrica per il trend temporale", metriche_disponibili)
+    metrica_selezionata = st.selectbox("Seleziona la metrica per il trend temporale", metriche_disponibili, key='metrica_trend')
 
     # Preparazione dei dati per il trend temporale
     if periodo_temporale == "Mese":
@@ -430,7 +374,7 @@ if 'data' in st.session_state:
 
     # Grafico di confronto canali
     st.subheader("Confronto tra Canali")
-    metrica_canali = st.selectbox("Seleziona la metrica per il confronto canali", metriche_disponibili, index=0, key='metrica_canali')
+    metrica_canali = st.selectbox("Seleziona la metrica per il confronto canali", metriche_disponibili, index=0, key='metrica_confronto')
 
     confronto_df = data_filtered.groupby('MainChannel').agg({
         'Opportunity_Created': 'count',
@@ -453,8 +397,8 @@ if 'data' in st.session_state:
     st.plotly_chart(fig_confronto, use_container_width=True)
 
     # Implementazione del click per drill-down nei grafici
-    st.markdown("**Clicca su una barra nel grafico per visualizzare dettagli specifici.**")
-    selected_bar = st.selectbox("Seleziona un canale per il drill-down", confronto_df['MainChannel'])
+    st.markdown("**Seleziona un canale per visualizzare dettagli specifici.**")
+    selected_bar = st.selectbox("Seleziona un canale per il drill-down", confronto_df['MainChannel'], key='selected_bar')
     if selected_bar:
         st.subheader(f"Dettagli per {selected_bar}")
         channel_data = data_filtered[data_filtered['MainChannel'] == selected_bar]
@@ -462,7 +406,7 @@ if 'data' in st.session_state:
 
     # Pipeline Funnel con breakdown per canale
     st.subheader("Pipeline Funnel per Canale")
-    funnel_option = st.selectbox("Seleziona il canale per visualizzare il funnel", ['Tutti'] + list(data_filtered['MainChannel'].unique()))
+    funnel_option = st.selectbox("Seleziona il canale per visualizzare il funnel", ['Tutti'] + list(data_filtered['MainChannel'].unique()), key='funnel_option')
 
     if funnel_option == 'Tutti':
         funnel_data = data_filtered
@@ -487,7 +431,7 @@ if 'data' in st.session_state:
     # Confronti temporali QoQ e YoY
     st.subheader("Confronti Temporali")
     periodi = ['Mese', 'Trimestre', 'Anno']
-    periodo_selezionato = st.selectbox("Seleziona il periodo per il confronto", periodi)
+    periodo_selezionato = st.selectbox("Seleziona il periodo per il confronto", periodi, key='periodo_confronto')
 
     if periodo_selezionato == 'Mese':
         data_filtered['Periodo'] = data_filtered['Opportunity_Created'].dt.to_period('M').astype(str)
@@ -528,7 +472,7 @@ if 'data' in st.session_state:
     # Zoom temporale avanzato
     st.subheader("Zoom Temporale Avanzato")
     zoom_options = ['Tutto', 'Ultimi 12 periodi', 'Ultimi 6 periodi', 'Ultimi 3 periodi']
-    zoom_selection = st.selectbox("Seleziona il range temporale", zoom_options)
+    zoom_selection = st.selectbox("Seleziona il range temporale", zoom_options, key='zoom_selection')
 
     if zoom_selection == 'Tutto':
         zoom_df = trend_df
@@ -550,24 +494,4 @@ st.markdown("""
     <div style='text-align: center; color: #888888;'>
         © 2024 - Boosha AI + Result Consulting.
     </div>
-    """, unsafe_allow_html=True)
-
-# Script per i grafici espandibili/collassabili
-st.markdown("""
-    <script>
-    var coll = document.getElementsByClassName("collapsible");
-    var i;
-
-    for (i = 0; i < coll.length; i++) {
-      coll[i].addEventListener("click", function() {
-        this.classList.toggle("active");
-        var content = this.nextElementSibling;
-        if (content.style.display === "block") {
-          content.style.display = "none";
-        } else {
-          content.style.display = "block";
-        }
-      });
-    }
-    </script>
     """, unsafe_allow_html=True)
