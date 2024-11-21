@@ -5,7 +5,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error
 
 # Configurazione della pagina
 st.set_page_config(
@@ -136,55 +135,64 @@ if uploaded_file is not None:
             break
 
     if sheet_name is None:
-        st.error("Non è stato trovato alcun foglio che contenga 'input' nel nome.")
+        # Se non trova un foglio con 'input', usa il primo foglio
+        sheet_name = xls.sheet_names[0]
+
+    # Legge il foglio corretto
+    data = pd.read_excel(uploaded_file, sheet_name=sheet_name)
+
+    # Rimuove eventuali spazi nei nomi delle colonne
+    data.columns = data.columns.str.strip()
+
+    # Verifica se le colonne sono state lette correttamente
+    expected_columns = ['Sales', 'Canale', 'Meeting FIssato', 'Meeting Effettuato (SQL)', 'Offerte Inviate', 'Analisi Firmate', 'Contratti Chiusi', 'Persi', 'Stato', 'Servizio', 'Valore Tot €', 'Azienda', 'Nome Persona', 'Ruolo', 'Dimensioni', 'Settore', 'Come mai ha accettato?', 'Obiezioni', 'Note']
+    missing_columns = [col for col in expected_columns if col not in data.columns]
+    if missing_columns:
+        st.error(f"Le seguenti colonne sono mancanti nel file caricato: {', '.join(missing_columns)}")
     else:
-        # Legge il foglio corretto
-        data = pd.read_excel(uploaded_file, sheet_name=sheet_name)
+        # Pulizia delle colonne di data
+        date_columns = ['Meeting FIssato', 'Meeting Effettuato (SQL)', 'Offerte Inviate', 'Analisi Firmate', 'Contratti Chiusi', 'Persi']
+        for col in date_columns:
+            if col in data.columns:
+                data[col] = pd.to_datetime(data[col], dayfirst=True, errors='coerce')
 
-        # Rimuove eventuali spazi nei nomi delle colonne
-        data.columns = data.columns.str.strip()
-
-        # Verifica se le colonne sono state lette correttamente
-        expected_columns = ['Sales', 'Canale', 'Data Creazione Opportunità', 'Data Chiusura', 'Stato', 'Servizio', 'Valore Tot €', 'Azienda', 'Nome Persona', 'Ruolo', 'Dimensioni', 'Settore', 'Come mai ha accettato?', 'Obiezioni', 'Note']
-        missing_columns = [col for col in expected_columns if col not in data.columns]
-        if missing_columns:
-            st.error(f"Le seguenti colonne sono mancanti nel file caricato: {', '.join(missing_columns)}")
+        # Pulizia della colonna 'Valore Tot €'
+        if 'Valore Tot €' in data.columns:
+            data['Valore Tot €'] = data['Valore Tot €'].astype(str).replace({'€': '', ',': '', '\.': ''}, regex=True)
+            data['Valore Tot €'] = pd.to_numeric(data['Valore Tot €'], errors='coerce').fillna(0)
         else:
-            # Pulizia delle colonne di data
-            date_columns = ['Data Creazione Opportunità', 'Data Chiusura']
-            for col in date_columns:
-                if col in data.columns:
-                    data[col] = pd.to_datetime(data[col], dayfirst=True, errors='coerce')
+            data['Valore Tot €'] = 0
 
-            # Pulizia della colonna 'Valore Tot €'
-            if 'Valore Tot €' in data.columns:
-                data['Valore Tot €'] = data['Valore Tot €'].astype(str).replace({'€': '', ',': '', '\.': ''}, regex=True)
-                data['Valore Tot €'] = pd.to_numeric(data['Valore Tot €'], errors='coerce').fillna(0)
-            else:
-                data['Valore Tot €'] = 0
+        # Processamento del campo 'Canale'
+        if 'Canale' in data.columns:
+            data['MainChannel'] = data['Canale'].apply(process_canale)
+        else:
+            data['MainChannel'] = 'Unknown'
 
-            # Processamento del campo 'Canale'
-            if 'Canale' in data.columns:
-                data['MainChannel'] = data['Canale'].apply(process_canale)
-            else:
-                data['MainChannel'] = 'Unknown'
+        # Aggiunta del campo 'TeamMember' dal campo 'Sales'
+        if 'Sales' in data.columns:
+            data['TeamMember'] = data['Sales'].str.title()
+        else:
+            data['TeamMember'] = None
 
-            # Aggiunta del campo 'TeamMember' dal campo 'Sales'
-            if 'Sales' in data.columns:
-                data['TeamMember'] = data['Sales'].str.title()
-            else:
-                data['TeamMember'] = None
+        # Creazione delle colonne 'Opportunity_Created', 'Closed_Won', 'Closed_Lost'
+        # 'Opportunity_Created' lo prendiamo da 'Meeting Effettuato (SQL)' o 'Meeting FIssato'
+        data['Opportunity_Created'] = data['Meeting Effettuato (SQL)'].combine_first(data['Meeting FIssato'])
 
-            # Aggiunta delle colonne 'Opportunity_Created', 'Closed_Won', 'Closed_Lost' in base allo 'Stato'
-            data['Opportunity_Created'] = data['Data Creazione Opportunità']
-            data['Closed_Won'] = np.where(data['Stato'].str.lower() == 'won', data['Data Chiusura'], pd.NaT)
-            data['Closed_Lost'] = np.where(data['Stato'].str.lower() == 'lost', data['Data Chiusura'], pd.NaT)
+        # 'Closed_Won' lo prendiamo da 'Contratti Chiusi'
+        data['Closed_Won'] = data['Contratti Chiusi']
 
-            st.success("Dati caricati con successo!")
-            if st.checkbox("Mostra dati grezzi"):
-                st.subheader("Dati Grezzi")
-                st.write(data)
-            st.session_state['data'] = data
+        # 'Closed_Lost' lo prendiamo da 'Persi'
+        data['Closed_Lost'] = data['Persi']
+
+        # Aggiusta la colonna 'Stato'
+        data['Stato'] = data['Stato'].fillna('In Progress')
+
+        st.success("Dati caricati con successo!")
+        if st.checkbox("Mostra dati grezzi"):
+            st.subheader("Dati Grezzi")
+            st.write(data)
+        st.session_state['data'] = data
 
 else:
     st.warning("Per favore, carica un file Excel per iniziare.")
@@ -197,6 +205,9 @@ if 'data' in st.session_state:
     # Periodo temporale
     min_date = data['Opportunity_Created'].min()
     max_date = data['Opportunity_Created'].max()
+    if pd.isnull(min_date) or pd.isnull(max_date):
+        min_date = datetime.today()
+        max_date = datetime.today()
     start_date, end_date = st.sidebar.date_input("Seleziona il periodo", [min_date, max_date])
 
     # Canale
@@ -369,15 +380,12 @@ if 'data' in st.session_state:
         'Valore Tot €': 'Total Closed Won Revenue',
     }).reset_index()
 
+    # Grafico per il confronto temporale
     fig_confronto_temporale = px.bar(confronto_temporale_df, x='Periodo', y=metriche_disponibili, barmode='group',
                                      title=f"Confronto Temporale - {periodo_selezionato}")
     st.plotly_chart(fig_confronto_temporale, use_container_width=True)
 
-    # Filtri e selezioni avanzate già implementate nella sidebar
-
-    # Interazioni avanzate (hover, click per drill-down) gestite automaticamente da Plotly
-
-    # Tema chiaro/scuro gestito dalle impostazioni del browser
+    # Interazioni avanzate gestite da Plotly
 
 else:
     st.warning("Per favore, carica i dati nella sezione 'Caricamento Dati' per continuare.")
