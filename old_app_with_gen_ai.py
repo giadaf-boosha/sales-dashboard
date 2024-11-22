@@ -281,54 +281,54 @@ else:
         metrics = calculate_metrics(data_filtered)
 
         # Sezione metriche chiave
-    st.subheader("Key Performance Indicators")
+        st.subheader("Key Performance Indicators")
 
-    # Creazione di un layout a 3 colonne per i KPI
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("""
-        <div class="metric-container">
-            <div class="metric-label">Opportunità Totali</div>
-            <div class="metric-value">{}</div>
-        </div>
-        """.format(metrics['totale_opportunita']), unsafe_allow_html=True)
+        # Creazione di un layout a 3 colonne per i KPI
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-label">Opportunità Totali</div>
+                <div class="metric-value">{metrics['totale_opportunita']}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.markdown("""
-        <div class="metric-container">
-            <div class="metric-label">Win Rate</div>
-            <div class="metric-value">{:.2f}%</div>
-        </div>
-        """.format(metrics['win_rate']), unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-label">Win Rate</div>
+                <div class="metric-value">{metrics['win_rate']:.2f}%</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    with col2:
-        st.markdown("""
-        <div class="metric-container">
-            <div class="metric-label">Opportunità Vinte</div>
-            <div class="metric-value">{}</div>
-        </div>
-        """.format(metrics['totale_vinti']), unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-label">Opportunità Vinte</div>
+                <div class="metric-value">{metrics['totale_vinti']}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.markdown("""
-        <div class="metric-container">
-            <div class="metric-label">Lost Rate</div>
-            <div class="metric-value">{:.2f}%</div>
-        </div>
-        """.format(metrics['lost_rate']), unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-label">Lost Rate</div>
+                <div class="metric-value">{metrics['lost_rate']:.2f}%</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    with col3:
-        st.markdown("""
-        <div class="metric-container">
-            <div class="metric-label">Revenue Totale</div>
-            <div class="metric-value">€{:,.2f}</div>
-        </div>
-        """.format(metrics['totale_revenue']), unsafe_allow_html=True)
+        with col3:
+            st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-label">Revenue Totale</div>
+                <div class="metric-value">€{metrics['totale_revenue']:.2f}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.markdown("""
-        <div class="metric-container">
-            <div class="metric-label">Pipeline Velocity</div>
-            <div class="metric-value">€{:,.2f}</div>
-        </div>
-        """.format(metrics['pipeline_velocity']), unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="metric-container">
+                <div class="metric-label">Pipeline Velocity</div>
+                <div class="metric-value">€{metrics['pipeline_velocity']:.2f}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
         # Tabella riepilogativa
         st.subheader("Tabella Riepilogativa per Canale")
