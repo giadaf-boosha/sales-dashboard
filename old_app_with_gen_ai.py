@@ -26,10 +26,70 @@ else:
     openai.api_key = openai_api_key
     st.success("Chiave API di OpenAI configurata correttamente!")
 
-    # Resto del codice dell'applicazione
-
     # Titolo dell'app
     st.title("📈 Dashboard Sales KPI + AI 🚀")
+
+    # Stile personalizzato
+    st.markdown("""
+        <style>
+        /* Font e colori */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+
+        html, body, [class*="css"]  {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Stile delle metriche */
+        .kpi-card {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+        }
+        .kpi-title {
+            font-size: 18px;
+            color: #333333;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .kpi-value {
+            font-size: 32px;
+            color: #007bff;
+            font-weight: bold;
+        }
+
+        /* Pulsanti e interattività */
+        .stButton>button {
+            color: #ffffff;
+            background-color: #007bff;
+            border-radius: 8px;
+            height: 3em;
+            font-size: 16px;
+        }
+
+        /* Tabelle */
+        .dataframe {
+            border: none;
+        }
+        .dataframe th {
+            background-color: #007bff;
+            color: white;
+            text-align: center;
+        }
+        .dataframe td {
+            text-align: center;
+        }
+
+        /* Grafici */
+        .plotly-graph-div .legend .traces .legendtoggle {
+            cursor: pointer;
+        }
+
+        </style>
+        """, unsafe_allow_html=True)
 
     # Funzione per processare il campo 'Canale'
     def process_canale(canale):
@@ -96,24 +156,32 @@ else:
     def generate_ai_insights(metrics, summary_df):
         # Preparazione del prompt per GPT-4o
         prompt = f"""
-        Sei un assistente virtuale che analizza le performance di vendita di un'azienda. Fornisci interpretazioni qualitative basate sulle seguenti metriche:
+Sei un assistente virtuale che analizza le performance di vendita di un'azienda. Fornisci un'interpretazione delle metriche e degli obiettivi per l'acquisizione e la conversione, seguendo questo schema:
 
-        - Totale Opportunità Create: {metrics['totale_opportunita']}
-        - Totale Opportunità Vinte: {metrics['totale_vinti']}
-        - Totale Opportunità Perse: {metrics['totale_persi']}
-        - Win Rate: {metrics['win_rate']:.2f}%
-        - Lost Rate: {metrics['lost_rate']:.2f}%
-        - Revenue Totale: €{metrics['totale_revenue']:.2f}
-        - Valore Medio Contratto: €{metrics['acv']:.2f}
-        - Tempo Medio di Chiusura: {metrics['tempo_medio_chiusura']:.2f} giorni
-        - Pipeline Velocity: €{metrics['pipeline_velocity']:.2f}
+1. **Panoramica delle Metriche e Obiettivi per l'Acquisizione e Conversione**
+   - Spiega brevemente cosa rappresenta ciascuna metrica e il suo obiettivo.
 
-        Analizza anche le performance per canale:
+2. **Obiettivi e Analisi delle Metriche**
+   - Fornisci un'analisi dettagliata delle performance, identificando punti di forza, aree di miglioramento e possibili azioni da intraprendere. Usa un linguaggio professionale e specifico.
 
-        {summary_df.to_string()}
+Ecco le metriche:
 
-        Fornisci un'analisi dettagliata delle performance, identificando punti di forza, aree di miglioramento e possibili azioni da intraprendere. Sii specifico e professionale nella tua risposta.
-        """
+- Totale Opportunità Create: {metrics['totale_opportunita']}
+- Totale Opportunità Vinte: {metrics['totale_vinti']}
+- Totale Opportunità Perse: {metrics['totale_persi']}
+- Win Rate: {metrics['win_rate']:.2f}%
+- Lost Rate: {metrics['lost_rate']:.2f}%
+- Revenue Totale: €{metrics['totale_revenue']:.2f}
+- Valore Medio Contratto: €{metrics['acv']:.2f}
+- Tempo Medio di Chiusura: {metrics['tempo_medio_chiusura']:.2f} giorni
+- Pipeline Velocity: €{metrics['pipeline_velocity']:.2f}
+
+Analizza anche le performance per canale:
+
+{summary_df.to_string()}
+
+Fornisci l'interpretazione come descritto sopra.
+"""
 
         # Chiamata all'API di OpenAI
         try:
@@ -123,7 +191,7 @@ else:
                     {"role": "system", "content": "Sei un esperto analista di vendite."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=500,
+                max_tokens=1000,
                 temperature=0.7,
             )
 
@@ -133,6 +201,54 @@ else:
 
         except Exception as e:
             st.error(f"Errore durante la generazione degli insight: {e}")
+            return None
+
+    # Funzione per gestire le domande dell'utente
+    def answer_user_question(question, metrics, summary_df):
+        # Preparazione del prompt
+        prompt = f"""
+Sei un esperto analista di vendite che risponde a domande sulla base delle seguenti metriche e dati:
+
+Metriche generali:
+- Totale Opportunità Create: {metrics['totale_opportunita']}
+- Totale Opportunità Vinte: {metrics['totale_vinti']}
+- Totale Opportunità Perse: {metrics['totale_persi']}
+- Win Rate: {metrics['win_rate']:.2f}%
+- Lost Rate: {metrics['lost_rate']:.2f}%
+- Revenue Totale: €{metrics['totale_revenue']:.2f}
+- Valore Medio Contratto: €{metrics['acv']:.2f}
+- Tempo Medio di Chiusura: {metrics['tempo_medio_chiusura']:.2f} giorni
+- Pipeline Velocity: €{metrics['pipeline_velocity']:.2f}
+
+Performance per canale:
+{summary_df.to_string()}
+
+Domanda dell'utente:
+\"\"\"
+{question}
+\"\"\"
+
+Rispondi in modo dettagliato e professionale, fornendo analisi e suggerimenti pertinenti.
+"""
+
+        # Chiamata all'API di OpenAI
+        try:
+            response = openai.chat.completions.create(
+                model="gpt-4o-2024-08-06",
+                messages=[
+                    {"role": "system", "content": "Sei un esperto analista di vendite."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=1000,
+                temperature=0.7,
+            )
+
+            # Estrazione del testo dalla risposta
+            answer = response.choices[0].message.content
+            return answer
+
+        except Exception as e:
+            st.error(f"Errore durante la generazione della risposta: {e}")
             return None
 
     # Caricamento dati
@@ -284,49 +400,50 @@ else:
         st.subheader("Key Performance Indicators")
 
         # Creazione di un layout a 3 colonne per i KPI
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3 = st.columns(3, gap="large")
+
         with col1:
             st.markdown(f"""
-            <div class="metric-container">
-                <div class="metric-label">Opportunità Totali</div>
-                <div class="metric-value">{metrics['totale_opportunita']}</div>
+            <div class="kpi-card">
+                <div class="kpi-title">Opportunità Totali</div>
+                <div class="kpi-value">{metrics['totale_opportunita']}</div>
             </div>
             """, unsafe_allow_html=True)
 
             st.markdown(f"""
-            <div class="metric-container">
-                <div class="metric-label">Win Rate</div>
-                <div class="metric-value">{metrics['win_rate']:.2f}%</div>
+            <div class="kpi-card">
+                <div class="kpi-title">Win Rate</div>
+                <div class="kpi-value">{metrics['win_rate']:.2f}%</div>
             </div>
             """, unsafe_allow_html=True)
 
         with col2:
             st.markdown(f"""
-            <div class="metric-container">
-                <div class="metric-label">Opportunità Vinte</div>
-                <div class="metric-value">{metrics['totale_vinti']}</div>
+            <div class="kpi-card">
+                <div class="kpi-title">Opportunità Vinte</div>
+                <div class="kpi-value">{metrics['totale_vinti']}</div>
             </div>
             """, unsafe_allow_html=True)
 
             st.markdown(f"""
-            <div class="metric-container">
-                <div class="metric-label">Lost Rate</div>
-                <div class="metric-value">{metrics['lost_rate']:.2f}%</div>
+            <div class="kpi-card">
+                <div class="kpi-title">Lost Rate</div>
+                <div class="kpi-value">{metrics['lost_rate']:.2f}%</div>
             </div>
             """, unsafe_allow_html=True)
 
         with col3:
             st.markdown(f"""
-            <div class="metric-container">
-                <div class="metric-label">Revenue Totale</div>
-                <div class="metric-value">€{metrics['totale_revenue']:.2f}</div>
+            <div class="kpi-card">
+                <div class="kpi-title">Revenue Totale</div>
+                <div class="kpi-value">€{metrics['totale_revenue']:.2f}</div>
             </div>
             """, unsafe_allow_html=True)
 
             st.markdown(f"""
-            <div class="metric-container">
-                <div class="metric-label">Pipeline Velocity</div>
-                <div class="metric-value">€{metrics['pipeline_velocity']:.2f}</div>
+            <div class="kpi-card">
+                <div class="kpi-title">Pipeline Velocity</div>
+                <div class="kpi-value">€{metrics['pipeline_velocity']:.2f}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -386,9 +503,17 @@ else:
             st.subheader("Interpretazione delle Metriche")
             st.markdown(insights)
 
-       
+        # Sezione per le domande aggiuntive
+        st.subheader("Chiedi all'Esperto di Vendite AI")
+        user_question = st.text_input("Fai una domanda sulle metriche o sulle performance di vendita:")
 
-        # [Aggiungi qui il codice per le visualizzazioni grafiche]
+        if user_question:
+            with st.spinner("Sto elaborando la tua domanda..."):
+                answer = answer_user_question(user_question, metrics, summary_df)
+                if answer:
+                    st.markdown("**Risposta dell'esperto AI:**")
+                    st.markdown(answer)
+ 
 
             # Visualizzazioni grafiche
             st.subheader("Visualizzazioni Grafiche")

@@ -91,6 +91,12 @@ else:
         </style>
         """, unsafe_allow_html=True)
 
+    # Funzione per formattare i numeri secondo le convenzioni italiane
+    def format_number(value):
+        s = "{:,.2f}".format(value)
+        s = s.replace(',', 'X').replace('.', ',').replace('X', '.')
+        return s
+
     # Funzione per processare il campo 'Canale'
     def process_canale(canale):
         canale = str(canale).strip().lower()
@@ -158,10 +164,7 @@ else:
         prompt = f"""
 Sei un assistente virtuale che analizza le performance di vendita di un'azienda. Fornisci un'interpretazione delle metriche e degli obiettivi per l'acquisizione e la conversione, seguendo questo schema:
 
-1. **Panoramica delle Metriche e Obiettivi per l'Acquisizione e Conversione**
-   - Spiega brevemente cosa rappresenta ciascuna metrica e il suo obiettivo.
-
-2. **Obiettivi e Analisi delle Metriche**
+ **Obiettivi e Analisi delle Metriche**
    - Fornisci un'analisi dettagliata delle performance, identificando punti di forza, aree di miglioramento e possibili azioni da intraprendere. Usa un linguaggio professionale e specifico.
 
 Ecco le metriche:
@@ -169,12 +172,12 @@ Ecco le metriche:
 - Totale Opportunità Create: {metrics['totale_opportunita']}
 - Totale Opportunità Vinte: {metrics['totale_vinti']}
 - Totale Opportunità Perse: {metrics['totale_persi']}
-- Win Rate: {metrics['win_rate']:.2f}%
-- Lost Rate: {metrics['lost_rate']:.2f}%
-- Revenue Totale: €{metrics['totale_revenue']:.2f}
-- Valore Medio Contratto: €{metrics['acv']:.2f}
-- Tempo Medio di Chiusura: {metrics['tempo_medio_chiusura']:.2f} giorni
-- Pipeline Velocity: €{metrics['pipeline_velocity']:.2f}
+- Win Rate: {format_number(metrics['win_rate'])}%
+- Lost Rate: {format_number(metrics['lost_rate'])}%
+- Revenue Totale: €{format_number(metrics['totale_revenue'])}
+- Valore Medio Contratto: €{format_number(metrics['acv'])}
+- Tempo Medio di Chiusura: {format_number(metrics['tempo_medio_chiusura'])} giorni
+- Pipeline Velocity: €{format_number(metrics['pipeline_velocity'])}
 
 Analizza anche le performance per canale:
 
@@ -213,12 +216,12 @@ Metriche generali:
 - Totale Opportunità Create: {metrics['totale_opportunita']}
 - Totale Opportunità Vinte: {metrics['totale_vinti']}
 - Totale Opportunità Perse: {metrics['totale_persi']}
-- Win Rate: {metrics['win_rate']:.2f}%
-- Lost Rate: {metrics['lost_rate']:.2f}%
-- Revenue Totale: €{metrics['totale_revenue']:.2f}
-- Valore Medio Contratto: €{metrics['acv']:.2f}
-- Tempo Medio di Chiusura: {metrics['tempo_medio_chiusura']:.2f} giorni
-- Pipeline Velocity: €{metrics['pipeline_velocity']:.2f}
+- Win Rate: {format_number(metrics['win_rate'])}%
+- Lost Rate: {format_number(metrics['lost_rate'])}%
+- Revenue Totale: €{format_number(metrics['totale_revenue'])}
+- Valore Medio Contratto: €{format_number(metrics['acv'])}
+- Tempo Medio di Chiusura: {format_number(metrics['tempo_medio_chiusura'])} giorni
+- Pipeline Velocity: €{format_number(metrics['pipeline_velocity'])}
 
 Performance per canale:
 {summary_df.to_string()}
@@ -413,7 +416,7 @@ Rispondi in modo dettagliato e professionale, fornendo analisi e suggerimenti pe
             st.markdown(f"""
             <div class="kpi-card">
                 <div class="kpi-title">Win Rate</div>
-                <div class="kpi-value">{metrics['win_rate']:.2f}%</div>
+                <div class="kpi-value">{format_number(metrics['win_rate'])}%</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -428,7 +431,7 @@ Rispondi in modo dettagliato e professionale, fornendo analisi e suggerimenti pe
             st.markdown(f"""
             <div class="kpi-card">
                 <div class="kpi-title">Lost Rate</div>
-                <div class="kpi-value">{metrics['lost_rate']:.2f}%</div>
+                <div class="kpi-value">{format_number(metrics['lost_rate'])}%</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -436,14 +439,14 @@ Rispondi in modo dettagliato e professionale, fornendo analisi e suggerimenti pe
             st.markdown(f"""
             <div class="kpi-card">
                 <div class="kpi-title">Revenue Totale</div>
-                <div class="kpi-value">€{metrics['totale_revenue']:.2f}</div>
+                <div class="kpi-value">€{format_number(metrics['totale_revenue'])}</div>
             </div>
             """, unsafe_allow_html=True)
 
             st.markdown(f"""
             <div class="kpi-card">
                 <div class="kpi-title">Pipeline Velocity</div>
-                <div class="kpi-value">€{metrics['pipeline_velocity']:.2f}</div>
+                <div class="kpi-value">€{format_number(metrics['pipeline_velocity'])}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -476,11 +479,11 @@ Rispondi in modo dettagliato e professionale, fornendo analisi e suggerimenti pe
 
             # Formattazione dei dati
             summary_df_formatted = summary_df[columns_to_display].style.format({
-                "Revenue Totale": "€{:.2f}",
-                "Valore Medio Contratto": "€{:.2f}",
-                "Pipeline Velocity": "€{:.2f}",
-                "Win Rate": "{:.2f}%",
-                "Tempo Medio di Chiusura (giorni)": "{:.2f}"
+                "Revenue Totale": lambda x: f"€{format_number(x)}",
+                "Valore Medio Contratto": lambda x: f"€{format_number(x)}",
+                "Pipeline Velocity": lambda x: f"€{format_number(x)}",
+                "Win Rate": lambda x: f"{format_number(x)}%",
+                "Tempo Medio di Chiusura (giorni)": lambda x: format_number(x)
             }).highlight_max(subset=['Opportunità Create', 'Revenue Totale', 'Win Rate', 'Pipeline Velocity'], color='#d4edda').highlight_min(subset=['Tempo Medio di Chiusura (giorni)'], color='#f8d7da')
 
             # Visualizzazione tabella
@@ -513,8 +516,8 @@ Rispondi in modo dettagliato e professionale, fornendo analisi e suggerimenti pe
                 if answer:
                     st.markdown("**Risposta dell'esperto AI:**")
                     st.markdown(answer)
- 
 
+        
             # Visualizzazioni grafiche
             st.subheader("Visualizzazioni Grafiche")
 
