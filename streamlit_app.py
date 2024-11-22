@@ -513,7 +513,7 @@ Rispondi in modo dettagliato e professionale, fornendo analisi e suggerimenti pe
                 if answer:
                     st.markdown("**Risposta dell'esperto AI:**")
                     st.markdown(answer)
-
+ 
 
             # Visualizzazioni grafiche
             st.subheader("Visualizzazioni Grafiche")
