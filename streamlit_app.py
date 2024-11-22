@@ -7,7 +7,11 @@ from datetime import datetime
 from openai import OpenAI  # Importazione della libreria OpenAI
 
 # Imposta la tua API key di OpenAI
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])  # Assicurati di aggiungere la tua API key nelle secrets di Streamlit
+try:
+    api_key = st.secrets["OPENAI_API_KEY"]
+    client = OpenAI(api_key=api_key)
+except KeyError:
+    st.error("Chiave API di OpenAI non trovata nei secrets! Verifica la configurazione su Streamlit Cloud.")
 
 # Configurazione della pagina
 st.set_page_config(
