@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -5,21 +6,29 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 from openai import OpenAI  # Importazione della libreria OpenAI
+import streamlit as st
+from dotenv import load_dotenv
+import os
 
-# Imposta la tua API key di OpenAI
-try:
-    api_key = st.secrets["OPENAI_API_KEY"]
-    client = OpenAI(api_key=api_key)
-except KeyError:
-    st.error("Chiave API di OpenAI non trovata nei secrets! Verifica la configurazione su Streamlit Cloud.")
-
-# Configurazione della pagina
+# Configurazione della pagina (DEVE essere la prima istruzione Streamlit)
 st.set_page_config(
     page_title="Dashboard Sales KPI + AI 🚀",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# Carica le variabili d'ambiente dal file .env
+load_dotenv()
+
+# Ottieni la chiave API dai secrets o dalle variabili d'ambiente
+api_key = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY"))
+
+if not api_key:
+    st.error("Chiave API di OpenAI non trovata!")
+else:
+    st.write("Chiave API trovata.")
+
 
 # Stile personalizzato
 st.markdown("""
