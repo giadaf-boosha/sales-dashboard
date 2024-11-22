@@ -1,12 +1,10 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
-from openai import OpenAI  # Importazione della libreria OpenAI
-import streamlit as st
+import openai  # Importazione della libreria OpenAI
 from dotenv import load_dotenv
 import os
 
@@ -26,12 +24,9 @@ with st.sidebar:
 if not openai_api_key:
     st.warning("Inserisci la tua OpenAI API Key nella barra laterale per continuare.")
 else:
-    # Prova a inizializzare il client di OpenAI con la chiave API fornita
-    try:
-        client = OpenAI(api_key=openai_api_key)
-        st.success("Chiave API di OpenAI configurata correttamente!")
-    except Exception as e:
-        st.error(f"Errore durante la configurazione della chiave API: {e}")
+    # Imposta la chiave API di OpenAI
+    openai.api_key = openai_api_key
+    st.success("Chiave API di OpenAI configurata correttamente!")
 
 # Aggiungi qui il resto del tuo codice per generare insight o altre funzionalità
 st.write("Benvenuto alla Dashboard Sales KPI + AI!")
@@ -186,26 +181,16 @@ Fornisci un'analisi dettagliata delle performance, identificando punti di forza,
 
     # Chiamata all'API di OpenAI
     try:
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4o-2024-08-06",
             messages=[
                 {
                     "role": "system",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Sei un esperto analista di vendite."
-                        }
-                    ]
+                    "content": "Sei un esperto analista di vendite."
                 },
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        }
-                    ]
+                    "content": prompt
                 }
             ],
             max_tokens=500,
@@ -213,13 +198,12 @@ Fornisci un'analisi dettagliata delle performance, identificando punti di forza,
         )
 
         # Estrazione del testo dalla risposta
-        insights = ''.join([part['text'] for part in response.choices[0].message['content']])
+        insights = response.choices[0].message.content
         return insights
 
     except Exception as e:
         st.error(f"Errore durante la generazione degli insight: {e}")
         return None
-
 # Resto del codice rimane invariato...
 
 # [Caricamento dati, filtri, calcolo metriche, visualizzazioni grafiche, ecc.]
@@ -367,7 +351,7 @@ if 'data' in st.session_state:
         (data['Stato'].isin(selected_stati))
     ]
 
-    # Calcolo delle metriche
+     # Calcolo delle metriche
     metrics = calculate_metrics(data_filtered)
 
     # Sezione metriche chiave
@@ -469,13 +453,12 @@ if 'data' in st.session_state:
             key='download_summary'
         )
 
-    # Generazione degli insight utilizzando GPT-4o
+  # Generazione degli insight utilizzando GPT-4o
     insights = generate_ai_insights(metrics, summary_df)
 
     if insights:
         st.subheader("Interpretazione delle Metriche")
         st.markdown(insights)
-
 
 
     # [Resto del codice per le visualizzazioni grafiche rimane invariato]
