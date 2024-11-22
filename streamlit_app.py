@@ -10,7 +10,7 @@ import streamlit as st
 from dotenv import load_dotenv
 import os
 
-# Configurazione della pagina (DEVE essere la prima istruzione Streamlit)
+# Configurazione della pagina
 st.set_page_config(
     page_title="Dashboard Sales KPI + AI 🚀",
     page_icon="📈",
@@ -18,16 +18,23 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Carica le variabili d'ambiente dal file .env
-load_dotenv()
+# Input della chiave API tramite la barra laterale
+with st.sidebar:
+    openai_api_key = st.text_input("OpenAI API Key", key="chatbot_api_key", type="password")
 
-# Ottieni la chiave API dai secrets o dalle variabili d'ambiente
-api_key = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY"))
-
-if not api_key:
-    st.error("Chiave API di OpenAI non trovata!")
+# Verifica che la chiave API sia stata inserita
+if not openai_api_key:
+    st.warning("Inserisci la tua OpenAI API Key nella barra laterale per continuare.")
 else:
-    st.write("Chiave API trovata.")
+    # Prova a inizializzare il client di OpenAI con la chiave API fornita
+    try:
+        client = OpenAI(api_key=openai_api_key)
+        st.success("Chiave API di OpenAI configurata correttamente!")
+    except Exception as e:
+        st.error(f"Errore durante la configurazione della chiave API: {e}")
+
+# Aggiungi qui il resto del tuo codice per generare insight o altre funzionalità
+st.write("Benvenuto alla Dashboard Sales KPI + AI!")
 
 
 # Stile personalizzato
