@@ -4,12 +4,10 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
-import openai  # Importazione della libreria OpenAI
-import os
-from dotenv import load_dotenv
-load_dotenv()
+from openai import OpenAI  # Importazione della libreria OpenAI
 
-api_key = os.getenv("OPENAI_API_KEY")
+# Imposta la tua API key di OpenAI
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])  # Assicurati di aggiungere la tua API key nelle secrets di Streamlit
 
 # Configurazione della pagina
 st.set_page_config(
@@ -147,43 +145,65 @@ def calculate_metrics(data):
 def generate_ai_insights(metrics, summary_df):
     # Preparazione del prompt per GPT-4o
     prompt = f"""
-    Sei un assistente virtuale che analizza le performance di vendita di un'azienda. Fornisci interpretazioni qualitative basate sulle seguenti metriche:
+Sei un assistente virtuale che analizza le performance di vendita di un'azienda. Fornisci interpretazioni qualitative basate sulle seguenti metriche:
 
-    - Totale Opportunità Create: {metrics['totale_opportunita']}
-    - Totale Opportunità Vinte: {metrics['totale_vinti']}
-    - Totale Opportunità Perse: {metrics['totale_persi']}
-    - Win Rate: {metrics['win_rate']:.2f}%
-    - Lost Rate: {metrics['lost_rate']:.2f}%
-    - Revenue Totale: €{metrics['totale_revenue']:.2f}
-    - Valore Medio Contratto: €{metrics['acv']:.2f}
-    - Tempo Medio di Chiusura: {metrics['tempo_medio_chiusura']:.2f} giorni
-    - Pipeline Velocity: €{metrics['pipeline_velocity']:.2f}
+- Totale Opportunità Create: {metrics['totale_opportunita']}
+- Totale Opportunità Vinte: {metrics['totale_vinti']}
+- Totale Opportunità Perse: {metrics['totale_persi']}
+- Win Rate: {metrics['win_rate']:.2f}%
+- Lost Rate: {metrics['lost_rate']:.2f}%
+- Revenue Totale: €{metrics['totale_revenue']:.2f}
+- Valore Medio Contratto: €{metrics['acv']:.2f}
+- Tempo Medio di Chiusura: {metrics['tempo_medio_chiusura']:.2f} giorni
+- Pipeline Velocity: €{metrics['pipeline_velocity']:.2f}
 
-    Analizza anche le performance per canale:
+Analizza anche le performance per canale:
 
-    {summary_df.to_string()}
+{summary_df.to_string()}
 
-    Fornisci un'analisi dettagliata delle performance, identificando punti di forza, aree di miglioramento e possibili azioni da intraprendere. Sii specifico e professionale nella tua risposta.
-    """
+Fornisci un'analisi dettagliata delle performance, identificando punti di forza, aree di miglioramento e possibili azioni da intraprendere. Sii specifico e professionale nella tua risposta.
+"""
 
     # Chiamata all'API di OpenAI
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o-2024-08-06",
             messages=[
-                {"role": "system", "content": "Sei un esperto analista di vendite."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Sei un esperto analista di vendite."
+                        }
+                    ]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt
+                        }
+                    ]
+                }
             ],
             max_tokens=500,
             temperature=0.7,
         )
 
-        insights = response['choices'][0]['message']['content']
+        # Estrazione del testo dalla risposta
+        insights = ''.join([part['text'] for part in response.choices[0].message['content']])
         return insights
 
     except Exception as e:
         st.error(f"Errore durante la generazione degli insight: {e}")
         return None
+
+# Resto del codice rimane invariato...
+
+# [Caricamento dati, filtri, calcolo metriche, visualizzazioni grafiche, ecc.]
+
 
 # Caricamento dati
 st.header("Caricamento dei Dati")
@@ -631,6 +651,14 @@ if 'data' in st.session_state:
 
 else:
     st.warning("Per favore, carica i dati nella sezione 'Caricamento Dati' per continuare.")
+
+# Dopo aver calcolato le metriche e creato summary_df, generiamo gli insight
+insights = generate_ai_insights(metrics, summary_df)
+
+if insights:
+    st.subheader("Interpretazione delle Metriche")
+    st.markdown(insights)
+
 
 # Footer
 st.markdown("""
